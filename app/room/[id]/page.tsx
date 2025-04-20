@@ -107,7 +107,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
     <div className="container py-8 space-y-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Extrato Team 🏆</h1>
+          <h1 className="text-3xl font-bold">Deliberating Room 🏆</h1>
           <div className="flex items-center gap-2 mt-1">
             <h2 className="text-xl">{room.title}</h2>
             <Badge>Sala: {room.id}</Badge>

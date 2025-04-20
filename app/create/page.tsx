@@ -54,7 +54,7 @@ export default function CreateRoom() {
     <div className="container flex items-center justify-center min-h-screen py-12">
       <Card className="w-full max-w-md rounded-lg">
         <CardHeader>
-          <CardTitle className="text-2xl font-bold">Criar uma Sala 🚀</CardTitle>
+          <CardTitle className="text-2xl font-bold">Deliberating Room 🚀</CardTitle>
           <CardDescription>Configure uma nova sala de deliberação como líder 👑</CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>

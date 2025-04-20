@@ -9,7 +9,7 @@ const montserrat = Montserrat({
 })
 
 export const metadata: Metadata = {
-  title: "Extrato Team",
+  title: "Deliberating Room",
   description: "Aplicativo de votação para deliberação em equipe",
     generator: 'v0.dev'
 }

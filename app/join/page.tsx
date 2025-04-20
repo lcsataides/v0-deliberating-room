@@ -51,7 +51,7 @@ export default function JoinRoom() {
     <div className="container flex items-center justify-center min-h-screen py-12">
       <Card className="w-full max-w-md rounded-lg">
         <CardHeader>
-          <CardTitle className="text-2xl font-bold">Entrar em uma Sala 🔑</CardTitle>
+          <CardTitle className="text-2xl font-bold">Deliberating Room 🔑</CardTitle>
           <CardDescription>Digite seu nome e o ID da sala para entrar 👥</CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
