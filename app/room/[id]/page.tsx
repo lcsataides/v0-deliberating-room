@@ -1,5 +1,7 @@
 "use client"
 
+import { CardFooter } from "@/components/ui/card"
+
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -7,7 +9,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import { getRoom, getCurrentUser, setUserObserverStatus, castVote, endVoting, startNewRound } from "@/lib/room-utils"
+import {
+  getRoom,
+  getCurrentUser,
+  setUserObserverStatus,
+  castVote,
+  endVoting,
+  startNewRound,
+  subscribeToRoom,
+} from "@/lib/supabase-utils"
 import type { Room, User } from "@/lib/types"
 import { ExternalLink, Copy, Users } from "lucide-react"
 import VotingCards from "@/components/voting-cards"
@@ -20,66 +30,93 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   const [room, setRoom] = useState<Room | null>(null)
   const [currentUser, setCurrentUser] = useState<User | null>(null)
   const [copied, setCopied] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  // Load room data
-  useEffect(() => {
-    const roomData = getRoom(params.id)
-    if (!roomData) {
-      router.push("/")
-      return
-    }
-
-    setRoom(roomData)
-
-    // Get current user
-    const user = getCurrentUser(params.id)
-    if (!user) {
-      router.push("/join")
-      return
-    }
-
-    setCurrentUser(user)
-
-    // Set up polling to refresh room data
-    const interval = setInterval(() => {
-      const updatedRoom = getRoom(params.id)
-      if (updatedRoom) {
-        setRoom(updatedRoom)
+  // Carregar dados da sala
+  const fetchRoomData = async () => {
+    try {
+      const roomData = await getRoom(params.id)
+      if (!roomData) {
+        setError("Sala não encontrada")
+        router.push("/")
+        return
       }
-    }, 2000)
 
-    return () => clearInterval(interval)
+      setRoom(roomData)
+
+      // Obter usuário atual
+      const user = await getCurrentUser(params.id)
+      if (!user) {
+        router.push(`/join?roomId=${params.id}`)
+        return
+      }
+
+      setCurrentUser(user)
+      setLoading(false)
+    } catch (err) {
+      console.error("Erro ao carregar sala:", err)
+      setError("Erro ao carregar dados da sala")
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchRoomData()
+
+    // Configurar escuta em tempo real
+    const unsubscribe = subscribeToRoom(params.id, fetchRoomData)
+
+    return () => {
+      unsubscribe()
+    }
   }, [params.id, router])
 
-  const handleObserverToggle = () => {
+  const handleObserverToggle = async () => {
     if (!currentUser || !room) return
 
-    const newStatus = !currentUser.isObserver
-    setUserObserverStatus(room.id, currentUser.id, newStatus)
+    try {
+      const newStatus = !currentUser.isObserver
+      await setUserObserverStatus(room.id, currentUser.id, newStatus)
 
-    // Update local state
-    setCurrentUser({
-      ...currentUser,
-      isObserver: newStatus,
-    })
+      // Atualizar estado local
+      setCurrentUser({
+        ...currentUser,
+        isObserver: newStatus,
+      })
+    } catch (err) {
+      console.error("Erro ao alterar status de observador:", err)
+    }
   }
 
-  const handleVote = (value: number) => {
-    if (!currentUser || !room || currentUser.isObserver) return
+  const handleVote = async (value: number) => {
+    if (!currentUser || !room || currentUser.isObserver || !room.currentRound.id) return
 
-    castVote(room.id, currentUser.id, value)
+    try {
+      await castVote(room.id, currentUser.id, room.currentRound.id, value)
+    } catch (err) {
+      console.error("Erro ao registrar voto:", err)
+    }
   }
 
-  const handleEndVoting = () => {
+  const handleEndVoting = async () => {
+    if (!room || !currentUser?.isLeader || !room.currentRound.id) return
+
+    try {
+      await endVoting(room.id, room.currentRound.id)
+    } catch (err) {
+      console.error("Erro ao encerrar votação:", err)
+    }
+  }
+
+  const handleNewRound = async () => {
     if (!room || !currentUser?.isLeader) return
 
-    endVoting(room.id)
-  }
-
-  const handleNewRound = () => {
-    if (!room || !currentUser?.isLeader) return
-
-    startNewRound(room.id)
+    try {
+      await startNewRound(room.id)
+    } catch (err) {
+      console.error("Erro ao iniciar nova rodada:", err)
+    }
   }
 
   const copyRoomLink = () => {
@@ -88,10 +125,30 @@ export default function RoomPage({ params }: { params: { id: string } }) {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  if (!room || !currentUser) {
+  if (loading) {
     return (
       <div className="container flex items-center justify-center min-h-screen">
         <p>Carregando...</p>
+      </div>
+    )
+  }
+
+  if (error || !room || !currentUser) {
+    return (
+      <div className="container flex items-center justify-center min-h-screen">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle>Erro</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p>{error || "Ocorreu um erro ao carregar a sala"}</p>
+          </CardContent>
+          <CardFooter>
+            <Button onClick={() => router.push("/")} className="w-full">
+              Voltar para a página inicial
+            </Button>
+          </CardFooter>
+        </Card>
       </div>
     )
   }

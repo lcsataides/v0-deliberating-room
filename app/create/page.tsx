@@ -2,52 +2,49 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { generateRoomId, createRoom } from "@/lib/room-utils"
+import { createRoom } from "@/lib/supabase-utils"
 
 export default function CreateRoom() {
   const router = useRouter()
+  const { user } = useAuth()
   const [name, setName] = useState("")
   const [roomTitle, setRoomTitle] = useState("")
   const [storyLink, setStoryLink] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState("")
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    // Preencher o nome com o nome do usuário autenticado
+    if (user?.user_metadata?.name) {
+      setName(user.user_metadata.name)
+    }
+  }, [user])
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name || !roomTitle) return
 
     setIsLoading(true)
+    setError("")
 
-    // Generate a unique room ID
-    const roomId = generateRoomId()
+    try {
+      // Criar a sala usando o Supabase
+      const { roomId } = await createRoom(roomTitle, storyLink, name, user?.id)
 
-    // Create the room with the current user as leader
-    createRoom({
-      id: roomId,
-      title: roomTitle,
-      storyLink: storyLink,
-      leader: {
-        id: Date.now().toString(),
-        name,
-        isLeader: true,
-        isObserver: false,
-      },
-      users: [],
-      currentRound: {
-        isOpen: true,
-        votes: {},
-        result: null,
-      },
-      history: [],
-    })
-
-    // Navigate to the room
-    router.push(`/room/${roomId}`)
+      // Navegar para a sala
+      router.push(`/room/${roomId}`)
+    } catch (err) {
+      console.error("Erro ao criar sala:", err)
+      setError("Ocorreu um erro ao criar a sala. Por favor, tente novamente.")
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -59,6 +56,7 @@ export default function CreateRoom() {
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
+            {error && <div className="p-3 text-sm bg-red-100 text-red-800 rounded-md">{error}</div>}
             <div className="space-y-2">
               <Label htmlFor="name">Seu Nome 👤</Label>
               <Input

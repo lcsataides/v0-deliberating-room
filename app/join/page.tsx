@@ -2,49 +2,57 @@
 
 import type React from "react"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { getRoom, joinRoom } from "@/lib/room-utils"
+import { joinRoom } from "@/lib/supabase-utils"
 import { AlertCircle } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export default function JoinRoom() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const { user } = useAuth()
   const [name, setName] = useState("")
   const [roomId, setRoomId] = useState("")
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    // Obter roomId da URL se disponível
+    const roomIdParam = searchParams.get("roomId")
+    if (roomIdParam) {
+      setRoomId(roomIdParam)
+    }
+
+    // Preencher o nome com o nome do usuário autenticado
+    if (user?.user_metadata?.name) {
+      setName(user.user_metadata.name)
+    }
+  }, [searchParams, user])
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
 
     if (!name || !roomId) return
     setIsLoading(true)
 
-    // Check if room exists
-    const room = getRoom(roomId)
-    if (!room) {
-      setError("Sala não encontrada. Por favor, verifique o ID da sala.")
+    try {
+      // Entrar na sala usando o Supabase
+      await joinRoom(roomId, name, user?.id)
+
+      // Navegar para a sala
+      router.push(`/room/${roomId}`)
+    } catch (err: any) {
+      console.error("Erro ao entrar na sala:", err)
+      setError(err.message || "Ocorreu um erro ao entrar na sala. Por favor, verifique o ID da sala.")
       setIsLoading(false)
-      return
     }
-
-    // Join the room
-    const userId = Date.now().toString()
-    joinRoom(roomId, {
-      id: userId,
-      name,
-      isLeader: false,
-      isObserver: false,
-    })
-
-    // Navigate to the room
-    router.push(`/room/${roomId}`)
   }
 
   return (

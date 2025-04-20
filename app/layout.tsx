@@ -2,6 +2,7 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Montserrat } from "next/font/google"
 import "./globals.css"
+import { AuthProvider } from "@/contexts/auth-context"
 
 const montserrat = Montserrat({
   subsets: ["latin"],
@@ -21,7 +22,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
-      <body className={`${montserrat.variable} font-sans`}>{children}</body>
+      <body className={`${montserrat.variable} font-sans`}>
+        <AuthProvider>{children}</AuthProvider>
+      </body>
     </html>
   )
 }
