@@ -9,11 +9,13 @@ import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { getRoom, castVote, endVoting, startNewRound, subscribeToRoom } from "@/lib/room-utils"
 import type { Room, User } from "@/lib/types"
-import { ExternalLink, Copy, Users } from "lucide-react"
+import { ExternalLink, Copy, Users, PlusCircle, AlertCircle } from "lucide-react"
 import VotingCards from "@/components/voting-cards"
 import UsersList from "@/components/users-list"
 import RoundResults from "@/components/round-results"
 import VotingHistory from "@/components/voting-history"
+import NewRoundModal from "@/components/new-round-modal"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export default function RoomPage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -23,6 +25,9 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   const [copied, setCopied] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showNewRoundModal, setShowNewRoundModal] = useState(false)
+  const [allVoted, setAllVoted] = useState(false)
+  const [showAllVotedAlert, setShowAllVotedAlert] = useState(false)
 
   // Carregar dados da sala
   const fetchRoomData = async () => {
@@ -60,6 +65,22 @@ export default function RoomPage({ params }: { params: { id: string } }) {
         return
       }
 
+      // Verificar se todos votaram
+      const newAllVoted =
+        roomData.users.length > 0 &&
+        roomData.users.filter((u) => !u.isObserver).every((u) => roomData.currentRound.votes[u.id] !== undefined) &&
+        roomData.currentRound.votes[roomData.leader.id] !== undefined
+
+      // Se todos votaram e a rodada está aberta, mostrar alerta
+      if (newAllVoted && roomData.currentRound.isOpen && !allVoted) {
+        setShowAllVotedAlert(true)
+        // Esconder o alerta após 5 segundos
+        setTimeout(() => {
+          setShowAllVotedAlert(false)
+        }, 5000)
+      }
+
+      setAllVoted(newAllVoted)
       setLoading(false)
     } catch (err) {
       console.error("Erro ao carregar sala:", err)
@@ -125,11 +146,16 @@ export default function RoomPage({ params }: { params: { id: string } }) {
     }
   }
 
-  const handleNewRound = async () => {
+  const handleNewRound = () => {
+    setShowNewRoundModal(true)
+  }
+
+  const handleStartNewRound = async (topic: string) => {
     if (!room || !isCreator) return
 
     try {
-      await startNewRound(room.id)
+      await startNewRound(room.id, topic)
+      setShowNewRoundModal(false)
     } catch (err) {
       console.error("Erro ao iniciar nova rodada:", err)
     }
@@ -170,14 +196,20 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   }
 
   const hasVoted = room.currentRound.votes[currentUser.id] !== undefined
-  const allVoted =
-    room.users.length > 0 &&
-    room.users.filter((u) => !u.isObserver).every((u) => room.currentRound.votes[u.id] !== undefined)
   const canEndVoting = isCreator && allVoted && room.currentRound.isOpen
   const canStartNewRound = isCreator && !room.currentRound.isOpen
 
   return (
     <div className="container py-8 space-y-8">
+      {showAllVotedAlert && (
+        <Alert className="bg-green-50 border-green-200 animate-in fade-in slide-in-from-top-5 duration-300">
+          <AlertCircle className="h-4 w-4 text-green-600" />
+          <AlertDescription className="text-green-700">
+            Todos os participantes votaram! O líder da sala pode encerrar a votação.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold">Deliberating Room 🏆</h1>
@@ -204,12 +236,17 @@ export default function RoomPage({ params }: { params: { id: string } }) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2 rounded-lg">
           <CardHeader>
-            <CardTitle>Votação 🗳️</CardTitle>
-            <CardDescription>
-              {room.currentRound.isOpen
-                ? "Selecione um cartão para votar"
-                : "A votação está encerrada para esta rodada"}
-            </CardDescription>
+            <div className="flex justify-between items-center">
+              <div>
+                <CardTitle>Votação 🗳️</CardTitle>
+                <CardDescription>
+                  {room.currentRound.isOpen
+                    ? "Selecione um cartão para votar"
+                    : "A votação está encerrada para esta rodada"}
+                </CardDescription>
+              </div>
+              <div className="text-sm font-medium text-primary">{room.currentRound.topic}</div>
+            </div>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="flex items-center space-x-2">
@@ -231,15 +268,16 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                   </Button>
                 )}
                 {canStartNewRound && (
-                  <Button className="rounded-sm" onClick={handleNewRound}>
-                    Iniciar Nova Rodada 🔄
+                  <Button className="rounded-sm flex items-center gap-2" onClick={handleNewRound}>
+                    <PlusCircle className="h-4 w-4" />
+                    Nova Rodada 🔄
                   </Button>
                 )}
               </div>
             )}
 
             {!room.currentRound.isOpen && room.currentRound.result && (
-              <RoundResults result={room.currentRound.result} />
+              <RoundResults result={room.currentRound.result} topic={room.currentRound.topic} />
             )}
           </CardContent>
         </Card>
@@ -277,6 +315,12 @@ export default function RoomPage({ params }: { params: { id: string } }) {
           )}
         </div>
       </div>
+
+      <NewRoundModal
+        isOpen={showNewRoundModal}
+        onClose={() => setShowNewRoundModal(false)}
+        onConfirm={handleStartNewRound}
+      />
     </div>
   )
 }

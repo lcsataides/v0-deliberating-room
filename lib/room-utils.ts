@@ -40,6 +40,7 @@ export async function createRoom(
     .insert({
       room_id: roomId,
       is_open: true,
+      topic: "Primeira rodada", // Tópico padrão para a primeira rodada
     })
     .select()
     .single()
@@ -144,6 +145,7 @@ export async function getRoom(roomId: string): Promise<Room | null> {
 
       history.push({
         id: historyRound.id,
+        topic: historyRound.topic || "Rodada sem tópico",
         votes: historyVotes,
         result: {
           average: historyRound.average || 0,
@@ -174,6 +176,7 @@ export async function getRoom(roomId: string): Promise<Room | null> {
 
   const currentRound: Round = {
     id: roundsData.id,
+    topic: roundsData.topic || "Rodada sem tópico",
     isOpen: roundsData.is_open,
     votes,
     result: roundsData.is_open
@@ -291,7 +294,7 @@ export async function endVoting(roomId: string, roundId: string): Promise<void> 
 }
 
 // Função para iniciar uma nova rodada
-export async function startNewRound(roomId: string): Promise<string> {
+export async function startNewRound(roomId: string, topic: string): Promise<string> {
   const supabase = createClientSupabaseClient()
 
   // Criar nova rodada
@@ -300,6 +303,7 @@ export async function startNewRound(roomId: string): Promise<string> {
     .insert({
       room_id: roomId,
       is_open: true,
+      topic: topic || `Rodada ${new Date().toLocaleString()}`,
     })
     .select()
     .single()

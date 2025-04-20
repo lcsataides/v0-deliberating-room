@@ -3,12 +3,16 @@ import { Card, CardContent } from "@/components/ui/card"
 
 interface RoundResultsProps {
   result: RoundResult
+  topic: string
 }
 
-export default function RoundResults({ result }: RoundResultsProps) {
+export default function RoundResults({ result, topic }: RoundResultsProps) {
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-medium">Resultados da Rodada 📊</h3>
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-medium">Resultados da Rodada 📊</h3>
+        <div className="text-sm font-medium text-primary">{topic}</div>
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card className="rounded-md">
           <CardContent className="pt-6">

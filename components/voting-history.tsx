@@ -13,6 +13,7 @@ export default function VotingHistory({ history }: VotingHistoryProps) {
             <h4 className="font-medium">Rodada {history.length - index}</h4>
             <span className="text-sm text-muted-foreground">{new Date(item.timestamp).toLocaleString()}</span>
           </div>
+          <div className="text-sm font-medium mb-2 text-primary">{item.topic}</div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
             <div>Média 📏:</div>
             <div className="font-medium">{item.result.average.toFixed(1)}</div>
