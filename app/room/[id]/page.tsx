@@ -7,16 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import {
-  getRoom,
-  getCurrentUserForRoom,
-  isRoomParticipant,
-  setUserObserverStatus,
-  castVote,
-  endVoting,
-  startNewRound,
-  subscribeToRoom,
-} from "@/lib/room-utils"
+import { getRoom, castVote, endVoting, startNewRound, subscribeToRoom } from "@/lib/room-utils"
 import type { Room, User } from "@/lib/types"
 import { ExternalLink, Copy, Users } from "lucide-react"
 import VotingCards from "@/components/voting-cards"
@@ -28,6 +19,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const [room, setRoom] = useState<Room | null>(null)
   const [currentUser, setCurrentUser] = useState<User | null>(null)
+  const [isCreator, setIsCreator] = useState(false)
   const [copied, setCopied] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -35,30 +27,39 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   // Carregar dados da sala
   const fetchRoomData = async () => {
     try {
-      // Verificar se o usuário é participante da sala
-      const isParticipant = await isRoomParticipant(params.id)
-      if (!isParticipant) {
-        router.push(`/join?roomId=${params.id}`)
-        return
-      }
-
       const roomData = await getRoom(params.id)
       if (!roomData) {
         setError("Sala não encontrada")
-        router.push("/")
         return
       }
 
       setRoom(roomData)
 
-      // Obter usuário atual
-      const user = await getCurrentUserForRoom(params.id)
-      if (!user) {
+      // Verificar se o usuário atual está na sala
+      const userId = localStorage.getItem(`room_${params.id}_user`)
+      const creatorId = localStorage.getItem(`room_${params.id}_creator`)
+
+      // Verificar se o usuário é o criador
+      setIsCreator(userId === creatorId && creatorId !== null)
+
+      if (userId) {
+        // Encontrar o usuário na lista
+        const user =
+          roomData.users.find((u) => u.id === userId) || (roomData.leader.id === userId ? roomData.leader : null)
+
+        if (user) {
+          setCurrentUser(user)
+        } else {
+          // Se o usuário não for encontrado, redirecionar para a página de entrada
+          router.push(`/join?roomId=${params.id}`)
+          return
+        }
+      } else {
+        // Se não houver ID de usuário, redirecionar para a página de entrada
         router.push(`/join?roomId=${params.id}`)
         return
       }
 
-      setCurrentUser(user)
       setLoading(false)
     } catch (err) {
       console.error("Erro ao carregar sala:", err)
@@ -82,13 +83,22 @@ export default function RoomPage({ params }: { params: { id: string } }) {
     if (!currentUser || !room) return
 
     try {
+      // Atualizar status de observador localmente
       const newStatus = !currentUser.isObserver
-      await setUserObserverStatus(room.id, currentUser.id, newStatus)
 
       // Atualizar estado local
       setCurrentUser({
         ...currentUser,
         isObserver: newStatus,
+      })
+
+      // Atualizar no banco de dados
+      await fetch(`/api/rooms/${room.id}/users/${currentUser.id}/observer`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ isObserver: newStatus }),
       })
     } catch (err) {
       console.error("Erro ao alterar status de observador:", err)
@@ -106,7 +116,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   }
 
   const handleEndVoting = async () => {
-    if (!room || !currentUser?.isLeader || !room.currentRound.id) return
+    if (!room || !isCreator || !room.currentRound.id) return
 
     try {
       await endVoting(room.id, room.currentRound.id)
@@ -116,7 +126,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   }
 
   const handleNewRound = async () => {
-    if (!room || !currentUser?.isLeader) return
+    if (!room || !isCreator) return
 
     try {
       await startNewRound(room.id)
@@ -163,8 +173,8 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   const allVoted =
     room.users.length > 0 &&
     room.users.filter((u) => !u.isObserver).every((u) => room.currentRound.votes[u.id] !== undefined)
-  const canEndVoting = currentUser.isLeader && allVoted && room.currentRound.isOpen
-  const canStartNewRound = currentUser.isLeader && !room.currentRound.isOpen
+  const canEndVoting = isCreator && allVoted && room.currentRound.isOpen
+  const canStartNewRound = isCreator && !room.currentRound.isOpen
 
   return (
     <div className="container py-8 space-y-8">
@@ -213,7 +223,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
               onVote={handleVote}
             />
 
-            {currentUser.isLeader && (
+            {isCreator && (
               <div className="flex justify-end gap-4 mt-4">
                 {canEndVoting && (
                   <Button className="rounded-sm" onClick={handleEndVoting}>

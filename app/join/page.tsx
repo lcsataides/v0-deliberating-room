@@ -11,7 +11,6 @@ import { Label } from "@/components/ui/label"
 import { joinRoom } from "@/lib/room-utils"
 import { AlertCircle } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { getCurrentUser } from "@/lib/temp-user-utils"
 
 export default function JoinRoom() {
   const router = useRouter()
@@ -22,22 +21,12 @@ export default function JoinRoom() {
   const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
-    // Verificar se o usuário está logado
-    const currentUser = getCurrentUser()
-    if (!currentUser) {
-      router.push("/login")
-      return
-    }
-
-    // Preencher o nome com o nome do usuário
-    setName(currentUser.name)
-
     // Obter roomId da URL se disponível
     const roomIdParam = searchParams.get("roomId")
     if (roomIdParam) {
       setRoomId(roomIdParam)
     }
-  }, [router, searchParams])
+  }, [searchParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -48,7 +37,10 @@ export default function JoinRoom() {
 
     try {
       // Entrar na sala
-      await joinRoom(roomId, name)
+      const { userId } = await joinRoom(roomId, name)
+
+      // Salvar o ID do usuário no localStorage
+      localStorage.setItem(`room_${roomId}_user`, userId)
 
       // Navegar para a sala
       router.push(`/room/${roomId}`)

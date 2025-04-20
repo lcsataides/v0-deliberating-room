@@ -2,14 +2,13 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { createRoom } from "@/lib/room-utils"
-import { getCurrentUser } from "@/lib/temp-user-utils"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
 
@@ -21,18 +20,6 @@ export default function CreateRoom() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
 
-  useEffect(() => {
-    // Verificar se o usuário está logado
-    const currentUser = getCurrentUser()
-    if (!currentUser) {
-      router.push("/login")
-      return
-    }
-
-    // Preencher o nome com o nome do usuário
-    setName(currentUser.name)
-  }, [router])
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name || !roomTitle) return
@@ -42,7 +29,11 @@ export default function CreateRoom() {
 
     try {
       // Criar a sala
-      const { roomId } = await createRoom(roomTitle, storyLink, name)
+      const { roomId, userId } = await createRoom(roomTitle, storyLink, name)
+
+      // Salvar o ID do usuário no localStorage
+      localStorage.setItem(`room_${roomId}_user`, userId)
+      localStorage.setItem(`room_${roomId}_creator`, userId)
 
       // Navegar para a sala
       router.push(`/room/${roomId}`)

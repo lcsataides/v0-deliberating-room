@@ -1,21 +1,18 @@
 import { createClientSupabaseClient } from "./supabase"
-import { getCurrentUser } from "./temp-user-utils"
-import type { Room, User, RoundResult, RoundHistoryItem } from "./types"
+import type { User, Room, Round, RoundResult, RoundHistoryItem } from "./types"
 
-// Gerar ID de sala aleatório
+// Função para gerar um ID de sala aleatório
 export function generateRoomId(): string {
   return Math.random().toString(36).substring(2, 8).toUpperCase()
 }
 
-// Criar uma nova sala
-export async function createRoom(title: string, storyLink: string, creatorName: string): Promise<{ roomId: string }> {
+// Função para criar uma sala
+export async function createRoom(
+  title: string,
+  storyLink: string,
+  leaderName: string,
+): Promise<{ roomId: string; userId: string }> {
   const supabase = createClientSupabaseClient()
-  const currentUser = getCurrentUser()
-
-  if (!currentUser) {
-    throw new Error("Usuário não está logado")
-  }
-
   const roomId = generateRoomId()
 
   // Criar a sala
@@ -25,30 +22,34 @@ export async function createRoom(title: string, storyLink: string, creatorName: 
     story_link: storyLink,
   })
 
-  // Adicionar o criador como líder da sala
-  await supabase.from("room_participants").insert({
-    user_id: currentUser.id,
-    room_id: roomId,
-    is_leader: true,
-  })
+  // Criar o usuário líder
+  const { data: userData } = await supabase
+    .from("users")
+    .insert({
+      name: leaderName,
+      room_id: roomId,
+      is_leader: true,
+      is_observer: false,
+    })
+    .select()
+    .single()
 
   // Criar a primeira rodada
-  await supabase.from("rounds").insert({
-    room_id: roomId,
-    is_open: true,
-  })
+  const { data: roundData } = await supabase
+    .from("rounds")
+    .insert({
+      room_id: roomId,
+      is_open: true,
+    })
+    .select()
+    .single()
 
-  return { roomId }
+  return { roomId, userId: userData!.id }
 }
 
-// Entrar em uma sala existente
-export async function joinRoom(roomId: string, userName: string): Promise<void> {
+// Função para entrar em uma sala
+export async function joinRoom(roomId: string, name: string): Promise<{ userId: string }> {
   const supabase = createClientSupabaseClient()
-  const currentUser = getCurrentUser()
-
-  if (!currentUser) {
-    throw new Error("Usuário não está logado")
-  }
 
   // Verificar se a sala existe
   const { data: roomData } = await supabase.from("rooms").select().eq("id", roomId).single()
@@ -57,25 +58,22 @@ export async function joinRoom(roomId: string, userName: string): Promise<void> 
     throw new Error("Sala não encontrada")
   }
 
-  // Verificar se o usuário já está na sala
-  const { data: existingParticipant } = await supabase
-    .from("room_participants")
-    .select()
-    .eq("user_id", currentUser.id)
-    .eq("room_id", roomId)
-    .single()
-
-  if (!existingParticipant) {
-    // Adicionar o usuário à sala
-    await supabase.from("room_participants").insert({
-      user_id: currentUser.id,
+  // Criar o usuário
+  const { data: userData } = await supabase
+    .from("users")
+    .insert({
+      name,
       room_id: roomId,
       is_leader: false,
+      is_observer: false,
     })
-  }
+    .select()
+    .single()
+
+  return { userId: userData!.id }
 }
 
-// Obter dados de uma sala
+// Função para obter os dados de uma sala
 export async function getRoom(roomId: string): Promise<Room | null> {
   const supabase = createClientSupabaseClient()
 
@@ -86,27 +84,15 @@ export async function getRoom(roomId: string): Promise<Room | null> {
     return null
   }
 
-  // Obter participantes da sala
-  const { data: participantsData } = await supabase
-    .from("room_participants")
-    .select(`
-      id,
-      user_id,
-      is_leader,
-      is_observer,
-      temp_users (
-        id,
-        name
-      )
-    `)
-    .eq("room_id", roomId)
+  // Obter usuários da sala
+  const { data: usersData } = await supabase.from("users").select().eq("room_id", roomId)
 
-  if (!participantsData || participantsData.length === 0) {
+  if (!usersData || usersData.length === 0) {
     return null
   }
 
   // Encontrar o líder
-  const leaderData = participantsData.find((p) => p.is_leader)
+  const leaderData = usersData.find((user) => user.is_leader)
 
   if (!leaderData) {
     return null
@@ -171,20 +157,33 @@ export async function getRoom(roomId: string): Promise<Room | null> {
 
   // Converter para o formato esperado
   const leader: User = {
-    id: leaderData.user_id,
-    name: leaderData.temp_users.name,
+    id: leaderData.id,
+    name: leaderData.name,
     isLeader: true,
     isObserver: leaderData.is_observer,
   }
 
-  const users: User[] = participantsData
-    .filter((p) => !p.is_leader)
-    .map((p) => ({
-      id: p.user_id,
-      name: p.temp_users.name,
+  const users: User[] = usersData
+    .filter((user) => !user.is_leader)
+    .map((user) => ({
+      id: user.id,
+      name: user.name,
       isLeader: false,
-      isObserver: p.is_observer,
+      isObserver: user.is_observer,
     }))
+
+  const currentRound: Round = {
+    id: roundsData.id,
+    isOpen: roundsData.is_open,
+    votes,
+    result: roundsData.is_open
+      ? null
+      : {
+          average: roundsData.average || 0,
+          mode: roundsData.mode || [],
+          totalVotes: roundsData.total_votes || 0,
+        },
+  }
 
   return {
     id: roomId,
@@ -192,73 +191,12 @@ export async function getRoom(roomId: string): Promise<Room | null> {
     storyLink: roomData.story_link || "",
     leader,
     users,
-    currentRound: {
-      id: roundsData.id,
-      isOpen: roundsData.is_open,
-      votes,
-      result: roundsData.is_open
-        ? null
-        : {
-            average: roundsData.average || 0,
-            mode: roundsData.mode || [],
-            totalVotes: roundsData.total_votes || 0,
-          },
-    },
+    currentRound,
     history,
   }
 }
 
-// Verificar se o usuário atual é participante da sala
-export async function isRoomParticipant(roomId: string): Promise<boolean> {
-  const currentUser = getCurrentUser()
-  if (!currentUser) return false
-
-  const supabase = createClientSupabaseClient()
-  const { data } = await supabase
-    .from("room_participants")
-    .select()
-    .eq("user_id", currentUser.id)
-    .eq("room_id", roomId)
-    .single()
-
-  return !!data
-}
-
-// Obter o usuário atual para uma sala
-export async function getCurrentUserForRoom(roomId: string): Promise<User | null> {
-  const currentUser = getCurrentUser()
-  if (!currentUser) return null
-
-  const supabase = createClientSupabaseClient()
-  const { data } = await supabase
-    .from("room_participants")
-    .select()
-    .eq("user_id", currentUser.id)
-    .eq("room_id", roomId)
-    .single()
-
-  if (!data) return null
-
-  return {
-    id: currentUser.id,
-    name: currentUser.name,
-    isLeader: data.is_leader,
-    isObserver: data.is_observer,
-  }
-}
-
-// Definir status de observador
-export async function setUserObserverStatus(roomId: string, userId: string, isObserver: boolean): Promise<void> {
-  const supabase = createClientSupabaseClient()
-
-  await supabase
-    .from("room_participants")
-    .update({ is_observer: isObserver })
-    .eq("user_id", userId)
-    .eq("room_id", roomId)
-}
-
-// Registrar um voto
+// Função para registrar um voto
 export async function castVote(roomId: string, userId: string, roundId: string, value: number): Promise<void> {
   const supabase = createClientSupabaseClient()
 
@@ -284,7 +222,7 @@ export async function castVote(roomId: string, userId: string, roundId: string, 
   }
 }
 
-// Calcular resultados de uma rodada
+// Função para calcular os resultados de uma rodada
 function calculateResults(votes: number[]): RoundResult {
   if (votes.length === 0) {
     return {
@@ -324,7 +262,7 @@ function calculateResults(votes: number[]): RoundResult {
   }
 }
 
-// Encerrar a votação da rodada atual
+// Função para encerrar a votação da rodada atual
 export async function endVoting(roomId: string, roundId: string): Promise<void> {
   const supabase = createClientSupabaseClient()
 
@@ -352,7 +290,7 @@ export async function endVoting(roomId: string, roundId: string): Promise<void> 
     .eq("id", roundId)
 }
 
-// Iniciar uma nova rodada
+// Função para iniciar uma nova rodada
 export async function startNewRound(roomId: string): Promise<string> {
   const supabase = createClientSupabaseClient()
 
@@ -369,7 +307,7 @@ export async function startNewRound(roomId: string): Promise<string> {
   return newRound!.id
 }
 
-// Configurar escuta de mudanças em tempo real
+// Função para configurar a escuta de mudanças em tempo real
 export function subscribeToRoom(roomId: string, callback: () => void) {
   const supabase = createClientSupabaseClient()
 
@@ -377,11 +315,7 @@ export function subscribeToRoom(roomId: string, callback: () => void) {
   const roomSubscription = supabase
     .channel(`room:${roomId}`)
     .on("postgres_changes", { event: "*", schema: "public", table: "rooms", filter: `id=eq.${roomId}` }, callback)
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "room_participants", filter: `room_id=eq.${roomId}` },
-      callback,
-    )
+    .on("postgres_changes", { event: "*", schema: "public", table: "users", filter: `room_id=eq.${roomId}` }, callback)
     .on("postgres_changes", { event: "*", schema: "public", table: "rounds", filter: `room_id=eq.${roomId}` }, callback)
     .on("postgres_changes", { event: "*", schema: "public", table: "votes", filter: `room_id=eq.${roomId}` }, callback)
     .subscribe()
@@ -389,4 +323,36 @@ export function subscribeToRoom(roomId: string, callback: () => void) {
   return () => {
     supabase.removeChannel(roomSubscription)
   }
+}
+
+// Função para atualizar o status de observador de um usuário
+export async function setUserObserverStatus(roomId: string, userId: string, isObserver: boolean): Promise<void> {
+  const supabase = createClientSupabaseClient()
+
+  await supabase.from("users").update({ is_observer: isObserver }).eq("id", userId).eq("room_id", roomId)
+}
+
+// API para atualizar o status de observador
+export async function updateObserverStatus(req: Request, roomId: string, userId: string): Promise<Response> {
+  try {
+    const { isObserver } = await req.json()
+
+    await setUserObserverStatus(roomId, userId, isObserver)
+
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { "Content-Type": "application/json" },
+      status: 200,
+    })
+  } catch (error) {
+    return new Response(JSON.stringify({ error: "Failed to update observer status" }), {
+      headers: { "Content-Type": "application/json" },
+      status: 500,
+    })
+  }
+}
+
+// Função para verificar se um usuário é o criador da sala
+export function isRoomCreator(roomId: string, userId: string): boolean {
+  const creatorId = localStorage.getItem(`room_${roomId}_creator`)
+  return userId === creatorId
 }

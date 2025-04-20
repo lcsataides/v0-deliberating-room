@@ -2,7 +2,6 @@ import Link from "next/link"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Clock, Zap } from "lucide-react"
 
 // Array de GIFs inspiradores sobre tecnologia e trabalho em equipe
 const inspiringGifs = [
@@ -48,36 +47,18 @@ export default function Home() {
                 Crie uma nova sala como líder ou entre em uma sala existente para participar da votação.
               </p>
             </div>
-
-            <div className="bg-yellow-50 p-4 rounded-md border border-yellow-200">
-              <div className="flex items-center gap-2 mb-2">
-                <Clock className="h-5 w-5 text-yellow-600" />
-                <h3 className="font-medium text-yellow-800">Acesso Temporário</h3>
-              </div>
-              <p className="text-sm text-yellow-700">
-                Crie uma conta temporária em segundos! Todos os dados serão automaticamente excluídos após 24 horas.
-              </p>
-            </div>
           </CardContent>
           <CardFooter className="flex flex-col space-y-4">
-            <Link href="/register" className="w-full">
+            <Link href="/create" className="w-full">
               <Button className="w-full rounded-sm bg-gradient-to-r from-blue-500 to-blue-700" size="lg">
-                <Zap className="mr-2 h-5 w-5" />
-                Acesso Rápido (24h)
+                Criar Nova Sala 🚀
               </Button>
             </Link>
-            <div className="flex gap-4 w-full">
-              <Link href="/login" className="w-1/2">
-                <Button variant="outline" className="w-full rounded-sm" size="lg">
-                  Login 🔑
-                </Button>
-              </Link>
-              <Link href="/join" className="w-1/2">
-                <Button variant="outline" className="w-full rounded-sm" size="lg">
-                  Entrar na Sala 🚪
-                </Button>
-              </Link>
-            </div>
+            <Link href="/join" className="w-full">
+              <Button variant="outline" className="w-full rounded-sm" size="lg">
+                Entrar em uma Sala 🚪
+              </Button>
+            </Link>
           </CardFooter>
         </Card>
       </div>
