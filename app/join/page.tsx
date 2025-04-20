@@ -4,36 +4,40 @@ import type React from "react"
 
 import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { joinRoom } from "@/lib/supabase-utils"
+import { joinRoom } from "@/lib/room-utils"
 import { AlertCircle } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { getCurrentUser } from "@/lib/temp-user-utils"
 
 export default function JoinRoom() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { user } = useAuth()
   const [name, setName] = useState("")
   const [roomId, setRoomId] = useState("")
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
+    // Verificar se o usuário está logado
+    const currentUser = getCurrentUser()
+    if (!currentUser) {
+      router.push("/login")
+      return
+    }
+
+    // Preencher o nome com o nome do usuário
+    setName(currentUser.name)
+
     // Obter roomId da URL se disponível
     const roomIdParam = searchParams.get("roomId")
     if (roomIdParam) {
       setRoomId(roomIdParam)
     }
-
-    // Preencher o nome com o nome do usuário autenticado
-    if (user?.user_metadata?.name) {
-      setName(user.user_metadata.name)
-    }
-  }, [searchParams, user])
+  }, [router, searchParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -43,8 +47,8 @@ export default function JoinRoom() {
     setIsLoading(true)
 
     try {
-      // Entrar na sala usando o Supabase
-      await joinRoom(roomId, name, user?.id)
+      // Entrar na sala
+      await joinRoom(roomId, name)
 
       // Navegar para a sala
       router.push(`/room/${roomId}`)

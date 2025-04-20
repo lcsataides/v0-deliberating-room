@@ -1,134 +1,292 @@
+import { createClientSupabaseClient } from "./supabase"
+import { getCurrentUser } from "./temp-user-utils"
 import type { Room, User, RoundResult, RoundHistoryItem } from "./types"
 
-// Local storage keys
-const ROOMS_KEY = "deliberating-rooms"
-const USER_ROOMS_KEY = "user-rooms"
-
-// Generate a random room ID
+// Gerar ID de sala aleatório
 export function generateRoomId(): string {
   return Math.random().toString(36).substring(2, 8).toUpperCase()
 }
 
-// Get all rooms from local storage
-function getRooms(): Record<string, Room> {
-  if (typeof window === "undefined") return {}
+// Criar uma nova sala
+export async function createRoom(title: string, storyLink: string, creatorName: string): Promise<{ roomId: string }> {
+  const supabase = createClientSupabaseClient()
+  const currentUser = getCurrentUser()
 
-  const roomsJson = localStorage.getItem(ROOMS_KEY)
-  return roomsJson ? JSON.parse(roomsJson) : {}
+  if (!currentUser) {
+    throw new Error("Usuário não está logado")
+  }
+
+  const roomId = generateRoomId()
+
+  // Criar a sala
+  await supabase.from("rooms").insert({
+    id: roomId,
+    title,
+    story_link: storyLink,
+  })
+
+  // Adicionar o criador como líder da sala
+  await supabase.from("room_participants").insert({
+    user_id: currentUser.id,
+    room_id: roomId,
+    is_leader: true,
+  })
+
+  // Criar a primeira rodada
+  await supabase.from("rounds").insert({
+    room_id: roomId,
+    is_open: true,
+  })
+
+  return { roomId }
 }
 
-// Save rooms to local storage
-function saveRooms(rooms: Record<string, Room>): void {
-  if (typeof window === "undefined") return
+// Entrar em uma sala existente
+export async function joinRoom(roomId: string, userName: string): Promise<void> {
+  const supabase = createClientSupabaseClient()
+  const currentUser = getCurrentUser()
 
-  localStorage.setItem(ROOMS_KEY, JSON.stringify(rooms))
+  if (!currentUser) {
+    throw new Error("Usuário não está logado")
+  }
+
+  // Verificar se a sala existe
+  const { data: roomData } = await supabase.from("rooms").select().eq("id", roomId).single()
+
+  if (!roomData) {
+    throw new Error("Sala não encontrada")
+  }
+
+  // Verificar se o usuário já está na sala
+  const { data: existingParticipant } = await supabase
+    .from("room_participants")
+    .select()
+    .eq("user_id", currentUser.id)
+    .eq("room_id", roomId)
+    .single()
+
+  if (!existingParticipant) {
+    // Adicionar o usuário à sala
+    await supabase.from("room_participants").insert({
+      user_id: currentUser.id,
+      room_id: roomId,
+      is_leader: false,
+    })
+  }
 }
 
-// Get a specific room
-export function getRoom(roomId: string): Room | null {
-  const rooms = getRooms()
-  return rooms[roomId] || null
-}
+// Obter dados de uma sala
+export async function getRoom(roomId: string): Promise<Room | null> {
+  const supabase = createClientSupabaseClient()
 
-// Create a new room
-export function createRoom(room: Room): void {
-  const rooms = getRooms()
-  rooms[room.id] = room
-  saveRooms(rooms)
+  // Obter dados da sala
+  const { data: roomData } = await supabase.from("rooms").select().eq("id", roomId).single()
 
-  // Save user association
-  saveUserRoom(room.leader.id, room.id)
-}
+  if (!roomData) {
+    return null
+  }
 
-// Update a room
-export function updateRoom(room: Room): void {
-  const rooms = getRooms()
-  rooms[room.id] = room
-  saveRooms(rooms)
-}
+  // Obter participantes da sala
+  const { data: participantsData } = await supabase
+    .from("room_participants")
+    .select(`
+      id,
+      user_id,
+      is_leader,
+      is_observer,
+      temp_users (
+        id,
+        name
+      )
+    `)
+    .eq("room_id", roomId)
 
-// Save user-room association
-function saveUserRoom(userId: string, roomId: string): void {
-  if (typeof window === "undefined") return
+  if (!participantsData || participantsData.length === 0) {
+    return null
+  }
 
-  const userRoomsJson = localStorage.getItem(USER_ROOMS_KEY)
-  const userRooms = userRoomsJson ? JSON.parse(userRoomsJson) : {}
-  userRooms[userId] = roomId
-  localStorage.setItem(USER_ROOMS_KEY, JSON.stringify(userRooms))
-}
+  // Encontrar o líder
+  const leaderData = participantsData.find((p) => p.is_leader)
 
-// Join a room
-export function joinRoom(roomId: string, user: User): void {
-  const room = getRoom(roomId)
-  if (!room) return
+  if (!leaderData) {
+    return null
+  }
 
-  room.users.push(user)
-  updateRoom(room)
+  // Obter a rodada atual
+  const { data: roundsData } = await supabase
+    .from("rounds")
+    .select()
+    .eq("room_id", roomId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single()
 
-  // Save user association
-  saveUserRoom(user.id, roomId)
-}
+  if (!roundsData) {
+    return null
+  }
 
-// Get current user for a room
-export function getCurrentUser(roomId: string): User | null {
-  if (typeof window === "undefined") return null
+  // Obter votos da rodada atual
+  const { data: votesData } = await supabase.from("votes").select().eq("round_id", roundsData.id)
 
-  const userRoomsJson = localStorage.getItem(USER_ROOMS_KEY)
-  if (!userRoomsJson) return null
+  // Converter votos para o formato esperado
+  const votes: Record<string, number> = {}
+  votesData?.forEach((vote) => {
+    votes[vote.user_id] = vote.value
+  })
 
-  const userRooms = JSON.parse(userRoomsJson)
-  const room = getRoom(roomId)
-  if (!room) return null
+  // Obter rodadas anteriores para o histórico
+  const { data: historyRoundsData } = await supabase
+    .from("rounds")
+    .select()
+    .eq("room_id", roomId)
+    .eq("is_open", false)
+    .order("created_at", { ascending: false })
 
-  // Check if user is the leader
-  if (Object.values(userRooms).includes(roomId)) {
-    const userId = Object.keys(userRooms).find((key) => userRooms[key] === roomId)
-    if (userId) {
-      if (room.leader.id === userId) {
-        return room.leader
-      }
+  // Converter rodadas anteriores para o formato esperado
+  const history: RoundHistoryItem[] = []
 
-      // Check if user is in the users array
-      const user = room.users.find((u) => u.id === userId)
-      if (user) {
-        return user
-      }
+  if (historyRoundsData && historyRoundsData.length > 0) {
+    for (const historyRound of historyRoundsData) {
+      // Obter votos da rodada histórica
+      const { data: historyVotesData } = await supabase.from("votes").select().eq("round_id", historyRound.id)
+
+      // Converter votos para o formato esperado
+      const historyVotes: Record<string, number> = {}
+      historyVotesData?.forEach((vote) => {
+        historyVotes[vote.user_id] = vote.value
+      })
+
+      history.push({
+        id: historyRound.id,
+        votes: historyVotes,
+        result: {
+          average: historyRound.average || 0,
+          mode: historyRound.mode || [],
+          totalVotes: historyRound.total_votes || 0,
+        },
+        timestamp: new Date(historyRound.created_at).getTime(),
+      })
     }
   }
 
-  return null
+  // Converter para o formato esperado
+  const leader: User = {
+    id: leaderData.user_id,
+    name: leaderData.temp_users.name,
+    isLeader: true,
+    isObserver: leaderData.is_observer,
+  }
+
+  const users: User[] = participantsData
+    .filter((p) => !p.is_leader)
+    .map((p) => ({
+      id: p.user_id,
+      name: p.temp_users.name,
+      isLeader: false,
+      isObserver: p.is_observer,
+    }))
+
+  return {
+    id: roomId,
+    title: roomData.title,
+    storyLink: roomData.story_link || "",
+    leader,
+    users,
+    currentRound: {
+      id: roundsData.id,
+      isOpen: roundsData.is_open,
+      votes,
+      result: roundsData.is_open
+        ? null
+        : {
+            average: roundsData.average || 0,
+            mode: roundsData.mode || [],
+            totalVotes: roundsData.total_votes || 0,
+          },
+    },
+    history,
+  }
 }
 
-// Set user observer status
-export function setUserObserverStatus(roomId: string, userId: string, isObserver: boolean): void {
-  const room = getRoom(roomId)
-  if (!room) return
+// Verificar se o usuário atual é participante da sala
+export async function isRoomParticipant(roomId: string): Promise<boolean> {
+  const currentUser = getCurrentUser()
+  if (!currentUser) return false
 
-  if (room.leader.id === userId) {
-    room.leader.isObserver = isObserver
+  const supabase = createClientSupabaseClient()
+  const { data } = await supabase
+    .from("room_participants")
+    .select()
+    .eq("user_id", currentUser.id)
+    .eq("room_id", roomId)
+    .single()
+
+  return !!data
+}
+
+// Obter o usuário atual para uma sala
+export async function getCurrentUserForRoom(roomId: string): Promise<User | null> {
+  const currentUser = getCurrentUser()
+  if (!currentUser) return null
+
+  const supabase = createClientSupabaseClient()
+  const { data } = await supabase
+    .from("room_participants")
+    .select()
+    .eq("user_id", currentUser.id)
+    .eq("room_id", roomId)
+    .single()
+
+  if (!data) return null
+
+  return {
+    id: currentUser.id,
+    name: currentUser.name,
+    isLeader: data.is_leader,
+    isObserver: data.is_observer,
+  }
+}
+
+// Definir status de observador
+export async function setUserObserverStatus(roomId: string, userId: string, isObserver: boolean): Promise<void> {
+  const supabase = createClientSupabaseClient()
+
+  await supabase
+    .from("room_participants")
+    .update({ is_observer: isObserver })
+    .eq("user_id", userId)
+    .eq("room_id", roomId)
+}
+
+// Registrar um voto
+export async function castVote(roomId: string, userId: string, roundId: string, value: number): Promise<void> {
+  const supabase = createClientSupabaseClient()
+
+  // Verificar se já existe um voto deste usuário nesta rodada
+  const { data: existingVote } = await supabase
+    .from("votes")
+    .select()
+    .eq("user_id", userId)
+    .eq("round_id", roundId)
+    .single()
+
+  if (existingVote) {
+    // Atualizar o voto existente
+    await supabase.from("votes").update({ value }).eq("id", existingVote.id)
   } else {
-    const userIndex = room.users.findIndex((u) => u.id === userId)
-    if (userIndex !== -1) {
-      room.users[userIndex].isObserver = isObserver
-    }
+    // Criar um novo voto
+    await supabase.from("votes").insert({
+      user_id: userId,
+      room_id: roomId,
+      round_id: roundId,
+      value,
+    })
   }
-
-  updateRoom(room)
 }
 
-// Cast a vote
-export function castVote(roomId: string, userId: string, value: number): void {
-  const room = getRoom(roomId)
-  if (!room || !room.currentRound.isOpen) return
-
-  room.currentRound.votes[userId] = value
-  updateRoom(room)
-}
-
-// Calculate round results
-function calculateResults(votes: Record<string, number>): RoundResult {
-  const voteValues = Object.values(votes)
-  if (voteValues.length === 0) {
+// Calcular resultados de uma rodada
+function calculateResults(votes: number[]): RoundResult {
+  if (votes.length === 0) {
     return {
       average: 0,
       mode: [],
@@ -136,13 +294,13 @@ function calculateResults(votes: Record<string, number>): RoundResult {
     }
   }
 
-  // Calculate average
-  const sum = voteValues.reduce((acc, val) => acc + val, 0)
-  const average = sum / voteValues.length
+  // Calcular média
+  const sum = votes.reduce((acc, val) => acc + val, 0)
+  const average = sum / votes.length
 
-  // Calculate mode (most common value)
+  // Calcular moda (valor mais comum)
   const counts: Record<number, number> = {}
-  voteValues.forEach((val) => {
+  votes.forEach((val) => {
     counts[val] = (counts[val] || 0) + 1
   })
 
@@ -162,45 +320,73 @@ function calculateResults(votes: Record<string, number>): RoundResult {
   return {
     average,
     mode: modes,
-    totalVotes: voteValues.length,
+    totalVotes: votes.length,
   }
 }
 
-// End voting for the current round
-export function endVoting(roomId: string): void {
-  const room = getRoom(roomId)
-  if (!room || !room.currentRound.isOpen) return
+// Encerrar a votação da rodada atual
+export async function endVoting(roomId: string, roundId: string): Promise<void> {
+  const supabase = createClientSupabaseClient()
 
-  // Calculate results
-  const result = calculateResults(room.currentRound.votes)
+  // Obter todos os votos da rodada
+  const { data: votesData } = await supabase.from("votes").select("value").eq("round_id", roundId)
 
-  // Update current round
-  room.currentRound.isOpen = false
-  room.currentRound.result = result
-
-  // Add to history
-  const historyItem: RoundHistoryItem = {
-    votes: { ...room.currentRound.votes },
-    result,
-    timestamp: Date.now(),
+  if (!votesData || votesData.length === 0) {
+    return
   }
 
-  room.history.push(historyItem)
+  // Calcular resultados
+  const voteValues = votesData.map((vote) => vote.value)
+  const result = calculateResults(voteValues)
 
-  updateRoom(room)
+  // Atualizar a rodada
+  await supabase
+    .from("rounds")
+    .update({
+      is_open: false,
+      average: result.average,
+      mode: result.mode,
+      total_votes: result.totalVotes,
+      closed_at: new Date().toISOString(),
+    })
+    .eq("id", roundId)
 }
 
-// Start a new round
-export function startNewRound(roomId: string): void {
-  const room = getRoom(roomId)
-  if (!room || room.currentRound.isOpen) return
+// Iniciar uma nova rodada
+export async function startNewRound(roomId: string): Promise<string> {
+  const supabase = createClientSupabaseClient()
 
-  // Reset current round
-  room.currentRound = {
-    isOpen: true,
-    votes: {},
-    result: null,
+  // Criar nova rodada
+  const { data: newRound } = await supabase
+    .from("rounds")
+    .insert({
+      room_id: roomId,
+      is_open: true,
+    })
+    .select()
+    .single()
+
+  return newRound!.id
+}
+
+// Configurar escuta de mudanças em tempo real
+export function subscribeToRoom(roomId: string, callback: () => void) {
+  const supabase = createClientSupabaseClient()
+
+  // Inscrever-se em mudanças na sala
+  const roomSubscription = supabase
+    .channel(`room:${roomId}`)
+    .on("postgres_changes", { event: "*", schema: "public", table: "rooms", filter: `id=eq.${roomId}` }, callback)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "room_participants", filter: `room_id=eq.${roomId}` },
+      callback,
+    )
+    .on("postgres_changes", { event: "*", schema: "public", table: "rounds", filter: `room_id=eq.${roomId}` }, callback)
+    .on("postgres_changes", { event: "*", schema: "public", table: "votes", filter: `room_id=eq.${roomId}` }, callback)
+    .subscribe()
+
+  return () => {
+    supabase.removeChannel(roomSubscription)
   }
-
-  updateRoom(room)
 }

@@ -4,16 +4,17 @@ import type React from "react"
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { createRoom } from "@/lib/supabase-utils"
+import { createRoom } from "@/lib/room-utils"
+import { getCurrentUser } from "@/lib/temp-user-utils"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { AlertCircle } from "lucide-react"
 
 export default function CreateRoom() {
   const router = useRouter()
-  const { user } = useAuth()
   const [name, setName] = useState("")
   const [roomTitle, setRoomTitle] = useState("")
   const [storyLink, setStoryLink] = useState("")
@@ -21,11 +22,16 @@ export default function CreateRoom() {
   const [error, setError] = useState("")
 
   useEffect(() => {
-    // Preencher o nome com o nome do usuário autenticado
-    if (user?.user_metadata?.name) {
-      setName(user.user_metadata.name)
+    // Verificar se o usuário está logado
+    const currentUser = getCurrentUser()
+    if (!currentUser) {
+      router.push("/login")
+      return
     }
-  }, [user])
+
+    // Preencher o nome com o nome do usuário
+    setName(currentUser.name)
+  }, [router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -35,14 +41,14 @@ export default function CreateRoom() {
     setError("")
 
     try {
-      // Criar a sala usando o Supabase
-      const { roomId } = await createRoom(roomTitle, storyLink, name, user?.id)
+      // Criar a sala
+      const { roomId } = await createRoom(roomTitle, storyLink, name)
 
       // Navegar para a sala
       router.push(`/room/${roomId}`)
-    } catch (err) {
+    } catch (err: any) {
       console.error("Erro ao criar sala:", err)
-      setError("Ocorreu um erro ao criar a sala. Por favor, tente novamente.")
+      setError(err.message || "Ocorreu um erro ao criar a sala. Por favor, tente novamente.")
       setIsLoading(false)
     }
   }
@@ -56,7 +62,12 @@ export default function CreateRoom() {
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
-            {error && <div className="p-3 text-sm bg-red-100 text-red-800 rounded-md">{error}</div>}
+            {error && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
             <div className="space-y-2">
               <Label htmlFor="name">Seu Nome 👤</Label>
               <Input

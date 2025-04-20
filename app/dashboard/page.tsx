@@ -2,13 +2,12 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { createClientSupabaseClient } from "@/lib/supabase"
 import Link from "next/link"
-import { PlusCircle, LogOut, History } from "lucide-react"
-import ExpirationBanner from "@/components/expiration-banner"
+import { PlusCircle, LogOut, History, AlertCircle } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { getCurrentUser, getUserRooms, removeCurrentUser } from "@/lib/temp-user-utils"
 
 interface RoomHistory {
   id: string
@@ -18,60 +17,51 @@ interface RoomHistory {
 }
 
 export default function DashboardPage() {
-  const { user, signOut, isLoading } = useAuth()
+  const [user, setUser] = useState<any>(null)
   const [rooms, setRooms] = useState<RoomHistory[]>([])
   const [loadingRooms, setLoadingRooms] = useState(true)
   const router = useRouter()
-  const supabase = createClientSupabaseClient()
 
   useEffect(() => {
-    // Redirecionar se não estiver autenticado
-    if (!isLoading && !user) {
+    // Verificar se o usuário está logado
+    const currentUser = getCurrentUser()
+    if (!currentUser) {
       router.push("/login")
+      return
     }
-  }, [user, isLoading, router])
 
-  useEffect(() => {
+    setUser(currentUser)
+
     // Carregar histórico de salas do usuário
     const fetchRooms = async () => {
-      if (!user) return
-
       setLoadingRooms(true)
-
       try {
-        // Buscar salas onde o usuário participou
-        const { data: userData } = await supabase
-          .from("users")
-          .select("room_id, is_leader, rooms(id, title, created_at)")
-          .eq("auth_id", user.id)
-          .order("created_at", { ascending: false })
+        // Tentar buscar salas do usuário
+        const roomsData = await getUserRooms(currentUser.id)
 
-        if (userData) {
-          const roomHistory: RoomHistory[] = userData.map((item) => ({
-            id: item.room_id,
-            title: item.rooms?.title || "Sala sem título",
-            created_at: item.rooms?.created_at || "",
-            is_leader: item.is_leader,
-          }))
+        const formattedRooms = roomsData.map((item) => ({
+          id: item.room_id,
+          title: item.rooms?.title || "Sala sem título",
+          created_at: item.rooms?.created_at || "",
+          is_leader: item.is_leader,
+        }))
 
-          setRooms(roomHistory)
-        }
+        setRooms(formattedRooms)
       } catch (error) {
         console.error("Erro ao carregar histórico de salas:", error)
+        // Em caso de erro, definir array vazio
+        setRooms([])
       } finally {
         setLoadingRooms(false)
       }
     }
 
     fetchRooms()
-  }, [user, supabase])
+  }, [router])
 
-  if (isLoading) {
-    return (
-      <div className="container flex items-center justify-center min-h-screen">
-        <p>Carregando...</p>
-      </div>
-    )
+  const handleLogout = () => {
+    removeCurrentUser()
+    router.push("/")
   }
 
   if (!user) {
@@ -83,15 +73,20 @@ export default function DashboardPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold">Dashboard 📊</h1>
-          <p className="text-muted-foreground">Bem-vindo, {user.user_metadata.name || user.email}!</p>
+          <p className="text-muted-foreground">Bem-vindo, {user.name}!</p>
         </div>
-        <Button variant="ghost" onClick={() => signOut()} className="flex items-center gap-2">
+        <Button variant="ghost" onClick={handleLogout} className="flex items-center gap-2">
           <LogOut className="h-4 w-4" />
           Sair
         </Button>
       </div>
 
-      <ExpirationBanner />
+      <Alert className="bg-yellow-50 border-yellow-200">
+        <AlertCircle className="h-4 w-4 text-yellow-600" />
+        <AlertDescription className="text-yellow-700">
+          Sua conta e todos os dados serão automaticamente excluídos após 24 horas.
+        </AlertDescription>
+      </Alert>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card className="rounded-lg">

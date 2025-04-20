@@ -4,18 +4,35 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Clock, Zap } from "lucide-react"
 
+// Array de GIFs inspiradores sobre tecnologia e trabalho em equipe
+const inspiringGifs = [
+  "https://media.giphy.com/media/l0MYsNWnIu9aUuYLK/giphy.gif", // RuPaul
+  "https://media.giphy.com/media/3oKIPrc2ngFZ6BTyww/giphy.gif", // Tech team high five
+  "https://media.giphy.com/media/xT9DPIlGnuHpr2yObu/giphy.gif", // Team celebration
+  "https://media.giphy.com/media/l46CyJmS9KUbokzsI/giphy.gif", // Team success
+  "https://media.giphy.com/media/QMHoU66sBXqqLqYvGO/giphy.gif", // Tech innovation
+]
+
+// Selecionar um GIF aleatório a cada renderização
+function getRandomGif() {
+  const randomIndex = Math.floor(Math.random() * inspiringGifs.length)
+  return inspiringGifs[randomIndex]
+}
+
 export default function Home() {
+  const randomGif = getRandomGif()
+
   return (
     <div className="container flex flex-col items-center justify-center min-h-screen py-12">
       <div className="relative w-full max-w-md">
-        {/* GIF sobreposto */}
-        <div className="relative w-[120%] h-64 -ml-[10%] -mb-16 z-10">
+        {/* GIF sobreposto estilizado */}
+        <div className="relative w-[125%] h-64 -ml-[12.5%] -mb-16 z-10">
           <Image
-            src="https://media.giphy.com/media/l0MYsNWnIu9aUuYLK/giphy.gif"
-            alt="RuPaul saying 'the judges and I will deliberate'"
+            src={randomGif || "/placeholder.svg"}
+            alt="Equipe inspiradora celebrando sucesso"
             fill
             style={{ objectFit: "cover" }}
-            className="rounded-t-xl shadow-lg"
+            className="rounded-3xl shadow-lg transform hover:scale-105 transition-transform duration-300"
           />
         </div>
 
