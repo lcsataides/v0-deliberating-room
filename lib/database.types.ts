@@ -10,6 +10,7 @@ export interface Database {
           story_link: string | null
           created_at: string
           is_active: boolean
+          has_more_stories: boolean
         }
         Insert: {
           id: string
@@ -17,6 +18,7 @@ export interface Database {
           story_link?: string | null
           created_at?: string
           is_active?: boolean
+          has_more_stories?: boolean
         }
         Update: {
           id?: string
@@ -24,6 +26,7 @@ export interface Database {
           story_link?: string | null
           created_at?: string
           is_active?: boolean
+          has_more_stories?: boolean
         }
       }
       users: {
@@ -34,7 +37,6 @@ export interface Database {
           is_leader: boolean
           is_observer: boolean
           created_at: string
-          auth_id: string | null
         }
         Insert: {
           id?: string
@@ -43,7 +45,6 @@ export interface Database {
           is_leader: boolean
           is_observer?: boolean
           created_at?: string
-          auth_id?: string | null
         }
         Update: {
           id?: string
@@ -52,7 +53,6 @@ export interface Database {
           is_leader?: boolean
           is_observer?: boolean
           created_at?: string
-          auth_id?: string | null
         }
       }
       votes: {
@@ -85,6 +85,7 @@ export interface Database {
         Row: {
           id: string
           room_id: string
+          topic: string
           is_open: boolean
           average: number | null
           mode: number[] | null
@@ -95,6 +96,7 @@ export interface Database {
         Insert: {
           id?: string
           room_id: string
+          topic: string
           is_open?: boolean
           average?: number | null
           mode?: number[] | null
@@ -105,38 +107,13 @@ export interface Database {
         Update: {
           id?: string
           room_id?: string
+          topic?: string
           is_open?: boolean
           average?: number | null
           mode?: number[] | null
           total_votes?: number | null
           created_at?: string
           closed_at?: string | null
-        }
-      }
-      profiles: {
-        Row: {
-          id: string
-          name: string
-          email: string
-          avatar_url: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id: string
-          name: string
-          email: string
-          avatar_url?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          name?: string
-          email?: string
-          avatar_url?: string | null
-          created_at?: string
-          updated_at?: string
         }
       }
     }

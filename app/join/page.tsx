@@ -32,20 +32,25 @@ export default function JoinRoom() {
     e.preventDefault()
     setError("")
 
-    if (!name || !roomId) return
+    if (!name || !roomId) {
+      setError("Nome e ID da sala são obrigatórios")
+      return
+    }
+
     setIsLoading(true)
 
     try {
+      console.log("Iniciando entrada na sala:", { roomId, name })
+
       // Entrar na sala
       const { userId } = await joinRoom(roomId, name)
 
-      // Salvar o ID do usuário no localStorage
-      localStorage.setItem(`room_${roomId}_user`, userId)
+      console.log("Entrada na sala bem-sucedida:", { userId })
 
       // Navegar para a sala
       router.push(`/room/${roomId}`)
     } catch (err: any) {
-      console.error("Erro ao entrar na sala:", err)
+      console.error("Erro detalhado ao entrar na sala:", err)
       setError(err.message || "Ocorreu um erro ao entrar na sala. Por favor, verifique o ID da sala.")
       setIsLoading(false)
     }
@@ -89,7 +94,14 @@ export default function JoinRoom() {
           </CardContent>
           <CardFooter>
             <Button type="submit" className="w-full rounded-sm" disabled={isLoading}>
-              {isLoading ? "Entrando..." : "Entrar na Sala 🚪"}
+              {isLoading ? (
+                <>
+                  <span className="mr-2">Entrando...</span>
+                  <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                </>
+              ) : (
+                "Entrar na Sala 🚪"
+              )}
             </Button>
           </CardFooter>
         </form>

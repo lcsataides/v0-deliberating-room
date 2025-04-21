@@ -22,23 +22,26 @@ export default function CreateRoom() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!name || !roomTitle) return
+    if (!name || !roomTitle) {
+      setError("Nome e título da sala são obrigatórios")
+      return
+    }
 
     setIsLoading(true)
     setError("")
 
     try {
+      console.log("Iniciando criação da sala...")
+
       // Criar a sala
       const { roomId, userId } = await createRoom(roomTitle, storyLink, name)
 
-      // Salvar o ID do usuário no localStorage
-      localStorage.setItem(`room_${roomId}_user`, userId)
-      localStorage.setItem(`room_${roomId}_creator`, userId)
+      console.log("Sala criada com sucesso:", { roomId, userId })
 
       // Navegar para a sala
       router.push(`/room/${roomId}`)
     } catch (err: any) {
-      console.error("Erro ao criar sala:", err)
+      console.error("Erro detalhado ao criar sala:", err)
       setError(err.message || "Ocorreu um erro ao criar a sala. Por favor, tente novamente.")
       setIsLoading(false)
     }
@@ -91,7 +94,14 @@ export default function CreateRoom() {
           </CardContent>
           <CardFooter>
             <Button type="submit" className="w-full rounded-sm" disabled={isLoading}>
-              {isLoading ? "Criando..." : "Criar Sala 🚀"}
+              {isLoading ? (
+                <>
+                  <span className="mr-2">Criando...</span>
+                  <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                </>
+              ) : (
+                "Criar Sala 🚀"
+              )}
             </Button>
           </CardFooter>
         </form>

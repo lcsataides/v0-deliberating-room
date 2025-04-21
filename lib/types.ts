@@ -35,4 +35,10 @@ export interface Room {
   users: User[]
   currentRound: Round
   history: RoundHistoryItem[]
+  hasMoreStories: boolean
+}
+
+export interface SessionUser {
+  id: string
+  roomId: string
 }
