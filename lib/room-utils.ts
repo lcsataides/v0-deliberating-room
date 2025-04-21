@@ -1,34 +1,20 @@
 import { createClientSupabaseClient } from "./supabase"
 import type { User, Room, Round, RoundResult, RoundHistoryItem } from "./types"
+import {
+  saveRoomWithExpiry,
+  getRoomWithExpiry,
+  saveRoomCreator,
+  saveRoomUser,
+  getRoomUser,
+  isCreatorOfRoom,
+  restoreRoomFromHistory,
+  cleanupExpiredRooms,
+} from "./room-memory"
+import { generateRandomFunName } from "./name-generator"
 
 // Função para gerar um ID de sala aleatório
 export function generateRoomId(): string {
   return Math.random().toString(36).substring(2, 8).toUpperCase()
-}
-
-// Função para salvar o usuário da sessão
-export function saveSessionUser(userId: string, roomId: string): void {
-  if (typeof window === "undefined") return
-  localStorage.setItem(`room_${roomId}_user`, userId)
-}
-
-// Função para salvar o criador da sala
-export function saveRoomCreator(userId: string, roomId: string): void {
-  if (typeof window === "undefined") return
-  localStorage.setItem(`room_${roomId}_creator`, userId)
-}
-
-// Função para salvar dados da sala localmente (fallback)
-export function saveRoomLocally(room: Room): void {
-  if (typeof window === "undefined") return
-  localStorage.setItem(`room_${room.id}`, JSON.stringify(room))
-}
-
-// Função para obter dados da sala localmente (fallback)
-export function getRoomLocally(roomId: string): Room | null {
-  if (typeof window === "undefined") return null
-  const roomData = localStorage.getItem(`room_${roomId}`)
-  return roomData ? JSON.parse(roomData) : null
 }
 
 // Função para gerar um ID único
@@ -56,12 +42,12 @@ export async function createRoom(
 
       console.log("Criando sala no Supabase:", { roomId, title, storyLink })
 
-      // Criar a sala
+      // Criar a sala - Removendo has_more_stories para evitar erros de esquema
       const { error: roomError } = await supabase.from("rooms").insert({
         id: roomId,
         title,
         story_link: storyLink,
-        has_more_stories: true,
+        is_active: true,
       })
 
       if (roomError) {
@@ -82,7 +68,6 @@ export async function createRoom(
           is_observer: true, // Líder começa como observador por padrão
         })
         .select()
-        .single()
 
       if (userError) {
         console.error("Erro ao criar usuário no Supabase:", userError)
@@ -91,13 +76,16 @@ export async function createRoom(
 
       console.log("Criando primeira rodada no Supabase:", { roomId })
 
+      // Gerar um nome divertido para a primeira rodada
+      const firstRoundTopic = generateRandomFunName()
+
       // Criar a primeira rodada
       const roundId = generateUUID()
       const { error: roundError } = await supabase.from("rounds").insert({
         id: roundId,
         room_id: roomId,
         is_open: true,
-        topic: "Primeira rodada", // Tópico padrão para a primeira rodada
+        topic: firstRoundTopic, // Usar o nome divertido gerado
       })
 
       if (roundError) {
@@ -106,8 +94,8 @@ export async function createRoom(
       }
 
       // Salvar o usuário da sessão e o criador
-      saveSessionUser(userId, roomId)
-      saveRoomCreator(userId, roomId)
+      saveRoomUser(roomId, userId)
+      saveRoomCreator(roomId, userId)
 
       // Criar sala localmente como fallback
       const room: Room = {
@@ -123,7 +111,7 @@ export async function createRoom(
         users: [],
         currentRound: {
           id: roundId,
-          topic: "Primeira rodada",
+          topic: firstRoundTopic,
           isOpen: true,
           votes: {},
           result: null,
@@ -132,7 +120,8 @@ export async function createRoom(
         hasMoreStories: true,
       }
 
-      saveRoomLocally(room)
+      // Salvar a sala com expiração
+      saveRoomWithExpiry(room)
 
       return { roomId, userId }
     } catch (supabaseError) {
@@ -140,6 +129,8 @@ export async function createRoom(
 
       // Fallback: criar sala localmente
       const roundId = generateUUID()
+      const firstRoundTopic = generateRandomFunName()
+
       const room: Room = {
         id: roomId,
         title,
@@ -153,7 +144,7 @@ export async function createRoom(
         users: [],
         currentRound: {
           id: roundId,
-          topic: "Primeira rodada",
+          topic: firstRoundTopic,
           isOpen: true,
           votes: {},
           result: null,
@@ -162,9 +153,9 @@ export async function createRoom(
         hasMoreStories: true,
       }
 
-      saveRoomLocally(room)
-      saveSessionUser(userId, roomId)
-      saveRoomCreator(userId, roomId)
+      saveRoomWithExpiry(room)
+      saveRoomUser(roomId, userId)
+      saveRoomCreator(roomId, userId)
 
       return { roomId, userId }
     }
@@ -177,43 +168,39 @@ export async function createRoom(
 // Função para entrar em uma sala
 export async function joinRoom(roomId: string, name: string): Promise<{ userId: string }> {
   try {
+    // Verificar se o usuário já está na sala (para reintegração)
+    const existingUserId = getRoomUser(roomId)
+    if (existingUserId) {
+      // Verificar se a sala existe localmente
+      const localRoom = getRoomWithExpiry(roomId)
+      if (localRoom) {
+        // Verificar se o usuário existe na sala
+        const existingUser =
+          localRoom.users.find((u) => u.id === existingUserId) ||
+          (localRoom.leader.id === existingUserId ? localRoom.leader : null)
+
+        if (existingUser) {
+          console.log("Usuário reintegrado à sala:", { userId: existingUserId, name: existingUser.name })
+          return { userId: existingUserId }
+        }
+      }
+    }
+
     const userId = generateUUID()
 
     try {
       const supabase = createClientSupabaseClient()
 
       // Verificar se a sala existe
-      const { data: roomData, error: roomError } = await supabase.from("rooms").select().eq("id", roomId).single()
+      const { data: roomData, error: roomError } = await supabase.from("rooms").select().eq("id", roomId)
 
       if (roomError) {
         console.error("Erro ao verificar sala no Supabase:", roomError)
+        throw roomError
+      }
 
-        // Verificar se a sala existe localmente
-        const localRoom = getRoomLocally(roomId)
-        if (!localRoom) {
-          throw new Error("Sala não encontrada")
-        }
-
-        // Adicionar usuário à sala local
-        const updatedUsers = [
-          ...localRoom.users,
-          {
-            id: userId,
-            name,
-            isLeader: false,
-            isObserver: false,
-          },
-        ]
-
-        const updatedRoom = {
-          ...localRoom,
-          users: updatedUsers,
-        }
-
-        saveRoomLocally(updatedRoom)
-        saveSessionUser(userId, roomId)
-
-        return { userId }
+      if (!roomData || roomData.length === 0) {
+        throw new Error("Sala não encontrada")
       }
 
       // Criar o usuário
@@ -231,16 +218,47 @@ export async function joinRoom(roomId: string, name: string): Promise<{ userId: 
       }
 
       // Salvar o usuário da sessão
-      saveSessionUser(userId, roomId)
+      saveRoomUser(roomId, userId)
 
       return { userId }
-    } catch (supabaseError) {
+    } catch (supabaseError: any) {
       console.error("Erro ao usar Supabase, verificando fallback local:", supabaseError)
 
+      // Verificar se é um erro 406 (Not Acceptable)
+      if (supabaseError.status === 406) {
+        console.error("Erro 406 detectado - Possível problema de permissões:", supabaseError)
+        throw new Error("Erro de permissão ao acessar a sala. Verifique suas permissões ou tente novamente mais tarde.")
+      }
+
       // Verificar se a sala existe localmente
-      const localRoom = getRoomLocally(roomId)
+      const localRoom = getRoomWithExpiry(roomId)
       if (!localRoom) {
-        throw new Error("Sala não encontrada")
+        // Tentar restaurar a sala do histórico
+        const restoredRoom = restoreRoomFromHistory(roomId)
+        if (!restoredRoom) {
+          throw new Error("Sala não encontrada")
+        }
+
+        // Adicionar usuário à sala restaurada
+        const updatedUsers = [
+          ...restoredRoom.users,
+          {
+            id: userId,
+            name,
+            isLeader: false,
+            isObserver: false,
+          },
+        ]
+
+        const updatedRoom = {
+          ...restoredRoom,
+          users: updatedUsers,
+        }
+
+        saveRoomWithExpiry(updatedRoom)
+        saveRoomUser(roomId, userId)
+
+        return { userId }
       }
 
       // Adicionar usuário à sala local
@@ -259,14 +277,22 @@ export async function joinRoom(roomId: string, name: string): Promise<{ userId: 
         users: updatedUsers,
       }
 
-      saveRoomLocally(updatedRoom)
-      saveSessionUser(userId, roomId)
+      saveRoomWithExpiry(updatedRoom)
+      saveRoomUser(roomId, userId)
 
       return { userId }
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("Erro detalhado ao entrar na sala:", error)
-    throw new Error("Falha ao entrar na sala. Por favor, tente novamente.")
+
+    // Mensagem de erro mais específica para o usuário
+    if (error.message.includes("permissão")) {
+      throw new Error("Erro de permissão ao acessar a sala. Verifique suas permissões ou tente novamente mais tarde.")
+    } else if (error.message.includes("não encontrada")) {
+      throw new Error("Sala não encontrada. Verifique o ID da sala e tente novamente.")
+    } else {
+      throw new Error("Falha ao entrar na sala. Por favor, tente novamente.")
+    }
   }
 }
 
@@ -277,12 +303,19 @@ export async function getRoom(roomId: string): Promise<Room | null> {
       const supabase = createClientSupabaseClient()
 
       // Obter dados da sala
-      const { data: roomData, error: roomError } = await supabase.from("rooms").select().eq("id", roomId).single()
+      const { data: roomData, error: roomError } = await supabase.from("rooms").select().eq("id", roomId)
 
       if (roomError) {
         console.error("Erro ao obter sala do Supabase:", roomError)
         throw roomError
       }
+
+      if (!roomData || roomData.length === 0) {
+        throw new Error("Sala não encontrada")
+      }
+
+      // Pegar o primeiro resultado se houver múltiplos
+      const roomInfo = roomData[0]
 
       // Obter usuários da sala
       const { data: usersData, error: usersError } = await supabase.from("users").select().eq("room_id", roomId)
@@ -310,15 +343,23 @@ export async function getRoom(roomId: string): Promise<Room | null> {
         .eq("room_id", roomId)
         .order("created_at", { ascending: false })
         .limit(1)
-        .single()
 
       if (roundsError) {
         console.error("Erro ao obter rodada do Supabase:", roundsError)
         throw roundsError
       }
 
+      if (!roundsData || roundsData.length === 0) {
+        throw new Error("Nenhuma rodada encontrada na sala")
+      }
+
+      const currentRoundData = roundsData[0]
+
       // Obter votos da rodada atual
-      const { data: votesData, error: votesError } = await supabase.from("votes").select().eq("round_id", roundsData.id)
+      const { data: votesData, error: votesError } = await supabase
+        .from("votes")
+        .select()
+        .eq("round_id", currentRoundData.id)
 
       if (votesError) {
         console.error("Erro ao obter votos do Supabase:", votesError)
@@ -398,58 +439,78 @@ export async function getRoom(roomId: string): Promise<Room | null> {
         }))
 
       const currentRound: Round = {
-        id: roundsData.id,
-        topic: roundsData.topic || "Rodada sem tópico",
-        isOpen: roundsData.is_open,
+        id: currentRoundData.id,
+        topic: currentRoundData.topic || "Rodada sem tópico",
+        isOpen: currentRoundData.is_open,
         votes,
-        result: roundsData.is_open
+        result: currentRoundData.is_open
           ? null
           : {
-              average: roundsData.average || 0,
-              mode: roundsData.mode || [],
-              totalVotes: roundsData.total_votes || 0,
+              average: currentRoundData.average || 0,
+              mode: currentRoundData.mode || [],
+              totalVotes: currentRoundData.total_votes || 0,
             },
       }
 
+      // Usar o valor de has_more_stories se existir, ou definir como true por padrão
+      const hasMoreStories = roomInfo.has_more_stories !== undefined ? roomInfo.has_more_stories : true
+
       const room: Room = {
         id: roomId,
-        title: roomData.title,
-        storyLink: roomData.story_link || "",
+        title: roomInfo.title,
+        storyLink: roomInfo.story_link || "",
         leader,
         users,
         currentRound,
         history,
-        hasMoreStories: roomData.has_more_stories || true,
+        hasMoreStories,
       }
 
       // Atualizar a sala local como fallback
-      saveRoomLocally(room)
+      saveRoomWithExpiry(room)
 
       return room
-    } catch (supabaseError) {
+    } catch (supabaseError: any) {
       console.error("Erro ao usar Supabase, usando fallback local:", supabaseError)
 
+      // Verificar se é um erro 406 (Not Acceptable)
+      if (supabaseError.status === 406) {
+        console.error("Erro 406 detectado - Possível problema de permissões:", supabaseError)
+        throw new Error("Erro de permissão ao acessar a sala. Verifique suas permissões ou tente novamente mais tarde.")
+      }
+
       // Fallback: obter sala localmente
-      const localRoom = getRoomLocally(roomId)
+      const localRoom = getRoomWithExpiry(roomId)
+
+      // Se não encontrar localmente, tentar restaurar do histórico
+      if (!localRoom) {
+        return restoreRoomFromHistory(roomId)
+      }
+
       return localRoom
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("Erro detalhado ao obter sala:", error)
-    throw new Error("Falha ao obter dados da sala. Por favor, tente novamente.")
+
+    // Mensagem de erro mais específica para o usuário
+    if (error.message.includes("permissão")) {
+      throw new Error("Erro de permissão ao acessar a sala. Verifique suas permissões ou tente novamente mais tarde.")
+    } else if (error.message.includes("não encontrada")) {
+      throw new Error("Sala não encontrada. Verifique o ID da sala e tente novamente.")
+    } else {
+      throw new Error("Falha ao obter dados da sala. Por favor, tente novamente.")
+    }
   }
 }
 
 // Função para obter o usuário atual
 export function getCurrentUser(roomId: string): string | null {
-  if (typeof window === "undefined") return null
-  return localStorage.getItem(`room_${roomId}_user`)
+  return getRoomUser(roomId)
 }
 
 // Função para verificar se o usuário é o criador da sala
 export function isRoomCreator(roomId: string, userId: string): boolean {
-  if (typeof window === "undefined") return false
-  const creatorId = localStorage.getItem(`room_${roomId}_creator`)
-  return userId === creatorId
+  return isCreatorOfRoom(roomId, userId)
 }
 
 // Função para definir o status de observador do usuário
@@ -468,11 +529,19 @@ export async function setUserObserverStatus(roomId: string, userId: string, isOb
         console.error("Erro ao atualizar status de observador no Supabase:", error)
         throw error
       }
-    } catch (supabaseError) {
+    } catch (supabaseError: any) {
       console.error("Erro ao usar Supabase, atualizando localmente:", supabaseError)
 
+      // Verificar se é um erro 406 (Not Acceptable)
+      if (supabaseError.status === 406) {
+        console.error("Erro 406 detectado - Possível problema de permissões:", supabaseError)
+        throw new Error(
+          "Erro de permissão ao atualizar status. Verifique suas permissões ou tente novamente mais tarde.",
+        )
+      }
+
       // Fallback: atualizar localmente
-      const localRoom = getRoomLocally(roomId)
+      const localRoom = getRoomWithExpiry(roomId)
       if (!localRoom) return
 
       if (localRoom.leader.id === userId) {
@@ -484,7 +553,7 @@ export async function setUserObserverStatus(roomId: string, userId: string, isOb
         }
       }
 
-      saveRoomLocally(localRoom)
+      saveRoomWithExpiry(localRoom)
     }
   } catch (error) {
     console.error("Erro detalhado ao atualizar status de observador:", error)
@@ -504,16 +573,15 @@ export async function castVote(roomId: string, userId: string, roundId: string, 
         .select()
         .eq("user_id", userId)
         .eq("round_id", roundId)
-        .single()
 
       if (checkError && checkError.code !== "PGRST116") {
         console.error("Erro ao verificar voto existente no Supabase:", checkError)
         throw checkError
       }
 
-      if (existingVote) {
+      if (existingVote && existingVote.length > 0) {
         // Atualizar o voto existente
-        const { error: updateError } = await supabase.from("votes").update({ value }).eq("id", existingVote.id)
+        const { error: updateError } = await supabase.from("votes").update({ value }).eq("id", existingVote[0].id)
         if (updateError) {
           console.error("Erro ao atualizar voto no Supabase:", updateError)
           throw updateError
@@ -532,16 +600,22 @@ export async function castVote(roomId: string, userId: string, roundId: string, 
           throw insertError
         }
       }
-    } catch (supabaseError) {
+    } catch (supabaseError: any) {
       console.error("Erro ao usar Supabase, atualizando localmente:", supabaseError)
 
+      // Verificar se é um erro 406 (Not Acceptable)
+      if (supabaseError.status === 406) {
+        console.error("Erro 406 detectado - Possível problema de permissões:", supabaseError)
+        throw new Error("Erro de permissão ao registrar voto. Verifique suas permissões ou tente novamente mais tarde.")
+      }
+
       // Fallback: registrar voto localmente
-      const localRoom = getRoomLocally(roomId)
+      const localRoom = getRoomWithExpiry(roomId)
       if (!localRoom) return
 
       if (localRoom.currentRound.id === roundId) {
         localRoom.currentRound.votes[userId] = value
-        saveRoomLocally(localRoom)
+        saveRoomWithExpiry(localRoom)
       }
     }
   } catch (error) {
@@ -631,11 +705,19 @@ export async function endVoting(roomId: string, roundId: string): Promise<void> 
         console.error("Erro ao atualizar rodada no Supabase:", updateError)
         throw updateError
       }
-    } catch (supabaseError) {
+    } catch (supabaseError: any) {
       console.error("Erro ao usar Supabase, atualizando localmente:", supabaseError)
 
+      // Verificar se é um erro 406 (Not Acceptable)
+      if (supabaseError.status === 406) {
+        console.error("Erro 406 detectado - Possível problema de permissões:", supabaseError)
+        throw new Error(
+          "Erro de permissão ao encerrar votação. Verifique suas permissões ou tente novamente mais tarde.",
+        )
+      }
+
       // Fallback: encerrar votação localmente
-      const localRoom = getRoomLocally(roomId)
+      const localRoom = getRoomWithExpiry(roomId)
       if (!localRoom || localRoom.currentRound.id !== roundId) return
 
       // Calcular resultados
@@ -659,7 +741,7 @@ export async function endVoting(roomId: string, roundId: string): Promise<void> 
         timestamp: Date.now(),
       })
 
-      saveRoomLocally(localRoom)
+      saveRoomWithExpiry(localRoom)
     }
   } catch (error) {
     console.error("Erro detalhado ao encerrar votação:", error)
@@ -680,7 +762,7 @@ export async function startNewRound(roomId: string, topic: string): Promise<stri
         id: roundId,
         room_id: roomId,
         is_open: true,
-        topic: topic || `Rodada ${new Date().toLocaleString()}`,
+        topic: topic || generateRandomFunName(), // Usar o tópico fornecido ou gerar um nome divertido
       })
 
       if (error) {
@@ -689,17 +771,25 @@ export async function startNewRound(roomId: string, topic: string): Promise<stri
       }
 
       return roundId
-    } catch (supabaseError) {
+    } catch (supabaseError: any) {
       console.error("Erro ao usar Supabase, atualizando localmente:", supabaseError)
 
+      // Verificar se é um erro 406 (Not Acceptable)
+      if (supabaseError.status === 406) {
+        console.error("Erro 406 detectado - Possível problema de permissões:", supabaseError)
+        throw new Error(
+          "Erro de permissão ao iniciar nova rodada. Verifique suas permissões ou tente novamente mais tarde.",
+        )
+      }
+
       // Fallback: criar nova rodada localmente
-      const localRoom = getRoomLocally(roomId)
+      const localRoom = getRoomWithExpiry(roomId)
       if (!localRoom) throw new Error("Sala não encontrada")
 
       // Criar nova rodada
       const newRound: Round = {
         id: roundId,
-        topic: topic || `Rodada ${new Date().toLocaleString()}`,
+        topic: topic || generateRandomFunName(),
         isOpen: true,
         votes: {},
         result: null,
@@ -707,7 +797,7 @@ export async function startNewRound(roomId: string, topic: string): Promise<stri
 
       // Atualizar a sala
       localRoom.currentRound = newRound
-      saveRoomLocally(localRoom)
+      saveRoomWithExpiry(localRoom)
 
       return roundId
     }
@@ -723,25 +813,39 @@ export async function markNoMoreStories(roomId: string): Promise<void> {
     try {
       const supabase = createClientSupabaseClient()
 
-      const { error } = await supabase.from("rooms").update({ has_more_stories: false }).eq("id", roomId)
+      // Verificar se a coluna has_more_stories existe
+      try {
+        // Tentar atualizar a coluna has_more_stories
+        const { error } = await supabase.from("rooms").update({ has_more_stories: false }).eq("id", roomId)
 
-      if (error) {
-        console.error("Erro ao marcar fim das histórias no Supabase:", error)
-        throw error
+        if (error) {
+          console.error("Erro ao marcar fim das histórias no Supabase:", error)
+
+          // Se o erro for relacionado à coluna não existente, apenas continue com o fallback
+          if (error.message && error.message.includes("has_more_stories")) {
+            throw new Error("Coluna has_more_stories não existe")
+          } else {
+            throw error
+          }
+        }
+      } catch (columnError) {
+        console.error("Erro com a coluna has_more_stories, usando fallback:", columnError)
+        // Continuar com o fallback local
+        throw columnError
       }
     } catch (supabaseError) {
       console.error("Erro ao usar Supabase, atualizando localmente:", supabaseError)
 
       // Fallback: atualizar localmente
-      const localRoom = getRoomLocally(roomId)
+      const localRoom = getRoomWithExpiry(roomId)
       if (!localRoom) return
 
       localRoom.hasMoreStories = false
-      saveRoomLocally(localRoom)
+      saveRoomWithExpiry(localRoom)
     }
   } catch (error) {
     console.error("Erro detalhado ao marcar fim das histórias:", error)
-    throw new Error("Falha ao atualizar status de histórias. Por favor, tente novamente.")
+    // Não lançar erro aqui, apenas continuar com o fallback local
   }
 }
 
@@ -806,5 +910,155 @@ export async function updateObserverStatus(req: Request, roomId: string, userId:
       headers: { "Content-Type": "application/json" },
       status: 500,
     })
+  }
+}
+
+// Função para limpar salas expiradas
+export function scheduledCleanupExpiredRooms(): void {
+  cleanupExpiredRooms()
+}
+
+// Função para reintegrar um membro que perdeu a conexão
+export async function reintegrateUser(roomId: string, userId: string): Promise<boolean> {
+  try {
+    // Verificar se a sala existe
+    const room = await getRoom(roomId)
+
+    if (!room) {
+      return false
+    }
+
+    // Verificar se o usuário existe na sala
+    const userExists = room.users.some((u) => u.id === userId) || room.leader.id === userId
+
+    if (!userExists) {
+      return false
+    }
+
+    // Usuário existe, reintegrar
+    return true
+  } catch (error) {
+    console.error("Erro ao reintegrar usuário:", error)
+    return false
+  }
+}
+
+// Função para verificar se o aplicativo está usando localStorage (modo offline)
+export function isUsingLocalStorage(): boolean {
+  try {
+    const supabase = createClientSupabaseClient()
+    return false
+  } catch (error) {
+    return true
+  }
+}
+
+// Função para verificar a acessibilidade da aplicação
+export function checkAccessibility(): { passed: boolean; issues: string[] } {
+  const issues: string[] = []
+
+  // Verificar se o navegador suporta localStorage
+  if (typeof window !== "undefined" && !window.localStorage) {
+    issues.push("Seu navegador não suporta localStorage, o que é necessário para o funcionamento offline.")
+  }
+
+  // Verificar se o navegador suporta fetch
+  if (typeof window !== "undefined" && !window.fetch) {
+    issues.push("Seu navegador não suporta fetch, o que é necessário para comunicação com o servidor.")
+  }
+
+  // Verificar se o navegador suporta flexbox
+  if (typeof window !== "undefined" && !CSS.supports("display", "flex")) {
+    issues.push("Seu navegador não suporta flexbox, o que pode afetar o layout da aplicação.")
+  }
+
+  return {
+    passed: issues.length === 0,
+    issues,
+  }
+}
+
+// Função para verificar integrações necessárias
+export function checkRequiredIntegrations(): {
+  supabase: boolean
+  localStorage: boolean
+  notifications: boolean
+} {
+  return {
+    supabase: !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    localStorage: typeof window !== "undefined" && !!window.localStorage,
+    notifications: typeof window !== "undefined" && "Notification" in window,
+  }
+}
+
+// Função para solicitar permissão para notificações
+export async function requestNotificationPermission(): Promise<boolean> {
+  if (typeof window === "undefined" || !("Notification" in window)) {
+    return false
+  }
+
+  if (Notification.permission === "granted") {
+    return true
+  }
+
+  if (Notification.permission !== "denied") {
+    const permission = await Notification.requestPermission()
+    return permission === "granted"
+  }
+
+  return false
+}
+
+// Função para enviar notificação quando todos votaram
+export function notifyAllVoted(roomTitle: string): void {
+  if (typeof window === "undefined" || !("Notification" in window) || Notification.permission !== "granted") {
+    return
+  }
+
+  new Notification("Todos votaram!", {
+    body: `Todos os participantes votaram na sala "${roomTitle}". O líder pode encerrar a votação.`,
+    icon: "/favicon.ico",
+  })
+}
+
+// Função para enviar notificação quando uma nova rodada é iniciada
+export function notifyNewRound(roomTitle: string, topic: string): void {
+  if (typeof window === "undefined" || !("Notification" in window) || Notification.permission !== "granted") {
+    return
+  }
+
+  new Notification("Nova rodada iniciada!", {
+    body: `Uma nova rodada foi iniciada na sala "${roomTitle}": ${topic}`,
+    icon: "/favicon.ico",
+  })
+}
+
+// Função para verificar se o navegador suporta todas as funcionalidades necessárias
+export function checkBrowserCompatibility(): { compatible: boolean; issues: string[] } {
+  const issues: string[] = []
+
+  // Verificar localStorage
+  if (typeof window !== "undefined" && !window.localStorage) {
+    issues.push("Seu navegador não suporta localStorage")
+  }
+
+  // Verificar fetch
+  if (typeof window !== "undefined" && !window.fetch) {
+    issues.push("Seu navegador não suporta fetch")
+  }
+
+  // Verificar flexbox
+  if (typeof window !== "undefined" && !CSS.supports("display", "flex")) {
+    issues.push("Seu navegador não suporta flexbox")
+  }
+
+  // Verificar grid
+  if (typeof window !== "undefined" && !CSS.supports("display", "grid")) {
+    issues.push("Seu navegador não suporta grid")
+  }
+
+  return {
+    compatible: issues.length === 0,
+    issues,
   }
 }

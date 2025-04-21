@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label"
 import { joinRoom } from "@/lib/room-utils"
 import { AlertCircle } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import Footer from "@/components/footer"
 
 export default function JoinRoom() {
   const router = useRouter()
@@ -57,55 +58,62 @@ export default function JoinRoom() {
   }
 
   return (
-    <div className="container flex items-center justify-center min-h-screen py-12">
-      <Card className="w-full max-w-md rounded-lg">
-        <CardHeader>
-          <CardTitle className="text-2xl font-bold">Deliberating Room 🔑</CardTitle>
-          <CardDescription>Digite seu nome e o ID da sala para entrar 👥</CardDescription>
-        </CardHeader>
-        <form onSubmit={handleSubmit}>
-          <CardContent className="space-y-4">
-            {error && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="name">Seu Nome 👤</Label>
-              <Input
-                id="name"
-                placeholder="Digite seu nome"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="roomId">ID da Sala 🔢</Label>
-              <Input
-                id="roomId"
-                placeholder="Digite o ID da sala"
-                value={roomId}
-                onChange={(e) => setRoomId(e.target.value)}
-                required
-              />
-            </div>
-          </CardContent>
-          <CardFooter>
-            <Button type="submit" className="w-full rounded-sm" disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <span className="mr-2">Entrando...</span>
-                  <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                </>
-              ) : (
-                "Entrar na Sala 🚪"
+    <div className="min-h-screen relative overflow-hidden">
+      {/* Moving gradient background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200 animate-gradient-slow"></div>
+
+      <div className="container flex items-center justify-center min-h-screen py-12 relative z-10">
+        <Card className="w-full max-w-md rounded-lg">
+          <CardHeader>
+            <CardTitle className="text-2xl font-bold">Deliberating Room 🔑</CardTitle>
+            <CardDescription>Digite seu nome e o ID da sala para entrar 👥</CardDescription>
+          </CardHeader>
+          <form onSubmit={handleSubmit}>
+            <CardContent className="space-y-4">
+              {error && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
               )}
-            </Button>
-          </CardFooter>
-        </form>
-      </Card>
+              <div className="space-y-2">
+                <Label htmlFor="name">Seu Nome 👤</Label>
+                <Input
+                  id="name"
+                  placeholder="Digite seu nome"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="roomId">ID da Sala 🔢</Label>
+                <Input
+                  id="roomId"
+                  placeholder="Digite o ID da sala"
+                  value={roomId}
+                  onChange={(e) => setRoomId(e.target.value)}
+                  required
+                />
+              </div>
+            </CardContent>
+            <CardFooter>
+              <Button type="submit" className="w-full rounded-sm" disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <span className="mr-2">Entrando...</span>
+                    <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  </>
+                ) : (
+                  "Entrar na Sala 🚪"
+                )}
+              </Button>
+            </CardFooter>
+          </form>
+        </Card>
+      </div>
+
+      <Footer />
     </div>
   )
 }
