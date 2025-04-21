@@ -13,7 +13,6 @@ import {
   endVoting,
   startNewRound,
   subscribeToRoom,
-  getCurrentUser,
   isRoomCreator,
   markNoMoreStories,
   isUsingLocalStorage,
@@ -23,6 +22,7 @@ import {
   notifyNewRound,
   reintegrateUser,
 } from "@/lib/room-utils"
+import { checkExistingRoomUser } from "@/lib/join-utils"
 import type { Room, User } from "@/lib/types"
 import {
   ExternalLink,
@@ -44,6 +44,8 @@ import VotingHistory from "@/components/voting-history"
 import NewRoundModal from "@/components/new-round-modal"
 import CelebrationAnimation from "@/components/celebration-animation"
 import SessionClosing from "@/components/session-closing"
+import DirectJoinForm from "@/components/direct-join-form"
+import ConnectionDiagnostic from "@/components/connection-diagnostic"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { motion, AnimatePresence } from "framer-motion"
 import Footer from "@/components/footer"
@@ -67,8 +69,11 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false)
   const [accessibilityIssues, setAccessibilityIssues] = useState<string[]>([])
   const [showAccessibilityAlert, setShowAccessibilityAlert] = useState(false)
+  const [needsJoining, setNeedsJoining] = useState(false)
+  const [showDiagnostic, setShowDiagnostic] = useState(false)
   const prevRoundIdRef = useRef<string | undefined>(undefined)
   const reconnectAttemptRef = useRef<number>(0)
+  const roomIdRef = useRef<string>(params.id)
 
   // Verificar acessibilidade e compatibilidade do navegador
   useEffect(() => {
@@ -83,63 +88,88 @@ export default function RoomPage({ params }: { params: { id: string } }) {
     if ("Notification" in window && Notification.permission === "granted") {
       setNotificationsEnabled(true)
     }
+
+    // Store the room ID in a ref for use in callbacks
+    roomIdRef.current = params.id
   }, [])
 
   // Carregar dados da sala
   const fetchRoomData = async () => {
     try {
-      const roomData = await getRoom(params.id)
-      if (!roomData) {
-        setError("Sala não encontrada")
+      console.log(`Fetching room data for room ${params.id}`)
+
+      // Check if user is already in the room
+      const existingUserId = checkExistingRoomUser(params.id)
+      console.log(`Existing user check: ${existingUserId ? "Found user" : "No user found"}`)
+
+      if (!existingUserId) {
+        console.log("User needs to join the room first")
+        setNeedsJoining(true)
+        setLoading(false)
         return
       }
+
+      const roomData = await getRoom(params.id)
+      if (!roomData) {
+        console.error(`Room ${params.id} not found`)
+        setError("Sala não encontrada")
+        setLoading(false)
+        return
+      }
+
+      console.log(`Room ${params.id} loaded successfully:`, {
+        title: roomData.title,
+        users: roomData.users.length + 1,
+        currentRound: roomData.currentRound.topic,
+      })
 
       setRoom(roomData)
       setIsOfflineMode(isUsingLocalStorage())
 
-      // Verificar se o usuário atual está na sala
-      const userId = getCurrentUser(params.id)
-
       // Verificar se o usuário é o criador
-      const userIsCreator = userId ? isRoomCreator(params.id, userId) : false
+      const userIsCreator = isRoomCreator(params.id, existingUserId)
       setIsCreator(userIsCreator)
+      console.log(`User is creator: ${userIsCreator}`)
 
-      if (userId) {
-        // Encontrar o usuário na lista
-        const user =
-          roomData.users.find((u) => u.id === userId) || (roomData.leader.id === userId ? roomData.leader : null)
+      // Encontrar o usuário na lista
+      const user =
+        roomData.users.find((u) => u.id === existingUserId) ||
+        (roomData.leader.id === existingUserId ? roomData.leader : null)
 
-        if (user) {
-          setCurrentUser(user)
-          // Resetar contador de tentativas de reconexão
-          reconnectAttemptRef.current = 0
-        } else {
-          // Tentar reintegrar o usuário
-          if (reconnectAttemptRef.current < 3) {
-            reconnectAttemptRef.current++
-            const reintegrated = await reintegrateUser(params.id, userId)
-
-            if (reintegrated) {
-              // Usuário reintegrado, recarregar dados
-              fetchRoomData()
-              return
-            } else {
-              // Se não conseguir reintegrar após 3 tentativas, redirecionar para a página de entrada
-              if (reconnectAttemptRef.current >= 3) {
-                router.push(`/join?roomId=${params.id}`)
-                return
-              }
-            }
-          } else {
-            // Se não conseguir reintegrar após 3 tentativas, redirecionar para a página de entrada
-            router.push(`/join?roomId=${params.id}`)
-            return
-          }
-        }
+      if (user) {
+        console.log(`User found in room: ${user.name} (${user.id})`)
+        setCurrentUser(user)
+        // Resetar contador de tentativas de reconexão
+        reconnectAttemptRef.current = 0
       } else {
-        // Se não houver ID de usuário, redirecionar para a página de entrada
-        router.push(`/join?roomId=${params.id}`)
-        return
+        console.warn(`User ${existingUserId} not found in room users list`)
+        // Tentar reintegrar o usuário
+        if (reconnectAttemptRef.current < 3) {
+          reconnectAttemptRef.current++
+          console.log(`Attempting to reintegrate user (attempt ${reconnectAttemptRef.current}/3)`)
+          const reintegrated = await reintegrateUser(params.id, existingUserId)
+
+          if (reintegrated) {
+            console.log("User successfully reintegrated")
+            // Usuário reintegrado, recarregar dados
+            fetchRoomData()
+            return
+          } else {
+            console.error("Failed to reintegrate user")
+            // Se não conseguir reintegrar após 3 tentativas, mostrar formulário de entrada
+            if (reconnectAttemptRef.current >= 3) {
+              console.log("Max reintegration attempts reached, showing join form")
+              setNeedsJoining(true)
+              setLoading(false)
+              return
+            }
+          }
+        } else {
+          console.log("Max reintegration attempts reached, showing join form")
+          setNeedsJoining(true)
+          setLoading(false)
+          return
+        }
       }
 
       // Verificar se todos votaram (exceto observadores)
@@ -192,7 +222,16 @@ export default function RoomPage({ params }: { params: { id: string } }) {
     return () => {
       unsubscribe()
     }
-  }, [params.id, router])
+  }, [params.id])
+
+  // Handle successful direct join
+  const handleJoinSuccess = (userId: string) => {
+    console.log(`Join successful with userId: ${userId}`)
+    // Reload the room data
+    setNeedsJoining(false)
+    setLoading(true)
+    fetchRoomData()
+  }
 
   // Solicitar permissão para notificações
   const handleRequestNotifications = async () => {
@@ -283,6 +322,30 @@ export default function RoomPage({ params }: { params: { id: string } }) {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  // Show direct join form if user needs to join
+  if (needsJoining) {
+    return (
+      <div className="min-h-screen relative overflow-hidden">
+        {/* Moving gradient background */}
+        <div className="absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200 animate-gradient-slow"></div>
+
+        <div className="container flex items-center justify-center min-h-screen relative z-10">
+          {showDiagnostic ? (
+            <ConnectionDiagnostic roomId={params.id} onBack={() => setShowDiagnostic(false)} />
+          ) : (
+            <DirectJoinForm
+              roomId={params.id}
+              onSuccess={handleJoinSuccess}
+              onDiagnose={() => setShowDiagnostic(true)}
+            />
+          )}
+        </div>
+
+        <Footer />
+      </div>
+    )
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen relative overflow-hidden">
@@ -319,9 +382,12 @@ export default function RoomPage({ params }: { params: { id: string } }) {
               <CardContent>
                 <p>{error || "Ocorreu um erro ao carregar a sala"}</p>
               </CardContent>
-              <CardFooter>
+              <CardFooter className="flex flex-col space-y-2">
                 <Button onClick={() => router.push("/")} className="w-full">
                   Voltar para a página inicial
+                </Button>
+                <Button variant="outline" onClick={() => setShowDiagnostic(true)} className="w-full">
+                  Diagnosticar Problemas de Conexão
                 </Button>
               </CardFooter>
             </Card>

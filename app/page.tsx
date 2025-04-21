@@ -3,6 +3,7 @@ import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import Footer from "@/components/footer"
+import DirectRoomEntry from "@/components/direct-room-entry"
 
 // Array de GIFs inspiradores sobre tecnologia e trabalho em equipe
 const inspiringGifs = [
@@ -52,6 +53,9 @@ export default function Home() {
                   Crie uma nova sala como líder ou entre em uma sala existente para participar da votação.
                 </p>
               </div>
+
+              {/* Direct room entry component */}
+              <DirectRoomEntry />
             </CardContent>
             <CardFooter className="flex flex-col space-y-4">
               <Link href="/create" className="w-full">

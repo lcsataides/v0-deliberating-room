@@ -8,18 +8,20 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { joinRoom } from "@/lib/room-utils"
-import { AlertCircle } from "lucide-react"
+import { joinRoomFromUrl, JoinRoomErrorType } from "@/lib/join-utils"
+import { AlertCircle, Loader2 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import Footer from "@/components/footer"
+import ConnectionDiagnostic from "@/components/connection-diagnostic"
 
 export default function JoinRoom() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [name, setName] = useState("")
   const [roomId, setRoomId] = useState("")
-  const [error, setError] = useState("")
+  const [error, setError] = useState<{ type: JoinRoomErrorType; message: string } | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [showDiagnostic, setShowDiagnostic] = useState(false)
 
   useEffect(() => {
     // Obter roomId da URL se disponível
@@ -31,10 +33,13 @@ export default function JoinRoom() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError("")
+    setError(null)
 
     if (!name || !roomId) {
-      setError("Nome e ID da sala são obrigatórios")
+      setError({
+        type: JoinRoomErrorType.UNKNOWN_ERROR,
+        message: "Nome e ID da sala são obrigatórios",
+      })
       return
     }
 
@@ -43,18 +48,41 @@ export default function JoinRoom() {
     try {
       console.log("Iniciando entrada na sala:", { roomId, name })
 
-      // Entrar na sala
-      const { userId } = await joinRoom(roomId, name)
+      // Use the improved join function
+      const result = await joinRoomFromUrl(roomId, name)
 
-      console.log("Entrada na sala bem-sucedida:", { userId })
-
-      // Navegar para a sala
-      router.push(`/room/${roomId}`)
+      if ("userId" in result) {
+        console.log("Entrada na sala bem-sucedida:", { userId: result.userId })
+        // Navegar para a sala
+        router.push(`/room/${roomId}`)
+      } else {
+        console.error("Erro ao entrar na sala:", result)
+        setError({
+          type: result.type,
+          message: result.message,
+        })
+        setIsLoading(false)
+      }
     } catch (err: any) {
       console.error("Erro detalhado ao entrar na sala:", err)
-      setError(err.message || "Ocorreu um erro ao entrar na sala. Por favor, verifique o ID da sala.")
+      setError({
+        type: JoinRoomErrorType.UNKNOWN_ERROR,
+        message: err.message || "Ocorreu um erro ao entrar na sala. Por favor, verifique o ID da sala.",
+      })
       setIsLoading(false)
     }
+  }
+
+  if (showDiagnostic && roomId) {
+    return (
+      <div className="min-h-screen relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200 animate-gradient-slow"></div>
+        <div className="container flex items-center justify-center min-h-screen py-12 relative z-10">
+          <ConnectionDiagnostic roomId={roomId} onBack={() => setShowDiagnostic(false)} />
+        </div>
+        <Footer />
+      </div>
+    )
   }
 
   return (
@@ -73,7 +101,7 @@ export default function JoinRoom() {
               {error && (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
+                  <AlertDescription>{error.message}</AlertDescription>
                 </Alert>
               )}
               <div className="space-y-2">
@@ -97,17 +125,28 @@ export default function JoinRoom() {
                 />
               </div>
             </CardContent>
-            <CardFooter>
+            <CardFooter className="flex flex-col space-y-2">
               <Button type="submit" className="w-full rounded-sm" disabled={isLoading}>
                 {isLoading ? (
                   <>
-                    <span className="mr-2">Entrando...</span>
-                    <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Entrando...
                   </>
                 ) : (
                   "Entrar na Sala 🚪"
                 )}
               </Button>
+              {roomId && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowDiagnostic(true)}
+                  className="text-xs text-muted-foreground"
+                >
+                  Problemas para entrar? Diagnosticar conexão
+                </Button>
+              )}
             </CardFooter>
           </form>
         </Card>
