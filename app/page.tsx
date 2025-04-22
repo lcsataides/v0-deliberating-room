@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import Footer from "@/components/footer"
 import DirectRoomEntry from "@/components/direct-room-entry"
 
-// Array de GIFs inspiradores sobre tecnologia e trabalho em equipe
+// Array of inspiring GIFs about technology and teamwork
 const inspiringGifs = [
   "https://media.giphy.com/media/l0MYsNWnIu9aUuYLK/giphy.gif", // RuPaul
   "https://media.giphy.com/media/3oKIPrc2ngFZ6BTyww/giphy.gif", // Tech team high five
@@ -14,7 +14,7 @@ const inspiringGifs = [
   "https://media.giphy.com/media/QMHoU66sBXqqLqYvGO/giphy.gif", // Tech innovation
 ]
 
-// Selecionar um GIF aleatório a cada renderização
+// Select a random GIF for each render
 function getRandomGif() {
   const randomIndex = Math.floor(Math.random() * inspiringGifs.length)
   return inspiringGifs[randomIndex]
@@ -28,44 +28,47 @@ export default function Home() {
       {/* Moving gradient background */}
       <div className="absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200 animate-gradient-slow"></div>
 
-      <div className="container flex flex-col items-center justify-center min-h-screen py-12 relative z-10">
+      <div className="container flex flex-col items-center justify-center min-h-screen py-12 relative z-10 px-4 sm:px-6">
         <div className="relative w-full max-w-md">
-          {/* GIF sobreposto estilizado */}
-          <div className="relative w-[125%] h-64 -ml-[12.5%] -mb-16 z-10">
+          {/* Overlaid styled GIF */}
+          <div className="relative w-[125%] h-48 sm:h-64 -ml-[12.5%] -mb-12 sm:-mb-16 z-10">
             <Image
               src={randomGif || "/placeholder.svg"}
-              alt="Equipe inspiradora celebrando sucesso"
+              alt="Inspiring team celebrating success"
               fill
               style={{ objectFit: "cover" }}
               className="rounded-3xl shadow-lg transform hover:scale-105 transition-transform duration-300"
             />
           </div>
 
-          {/* Card principal */}
-          <Card className="w-full rounded-lg pt-12 relative z-0 shadow-md">
-            <CardHeader className="text-center">
-              <CardTitle className="text-3xl font-bold">Deliberating Room 🏆</CardTitle>
-              <CardDescription>Crie ou entre em uma sala de deliberação 👥</CardDescription>
+          {/* Main card */}
+          <Card className="w-full rounded-lg pt-10 sm:pt-12 relative z-0 shadow-lg">
+            <CardHeader className="text-center px-6 pt-6 pb-4">
+              <CardTitle className="text-2xl sm:text-3xl font-bold">Deliberating Room 🏆</CardTitle>
+              <CardDescription>Create or join a deliberation room 👥</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-5 px-6">
               <div className="text-center space-y-2">
                 <p className="text-muted-foreground">
-                  Crie uma nova sala como líder ou entre em uma sala existente para participar da votação.
+                  Create a new room as a leader or join an existing room to participate in voting.
                 </p>
               </div>
 
               {/* Direct room entry component */}
               <DirectRoomEntry />
             </CardContent>
-            <CardFooter className="flex flex-col space-y-4">
+            <CardFooter className="flex flex-col space-y-4 px-6 pb-6 pt-2">
               <Link href="/create" className="w-full">
-                <Button className="w-full rounded-sm bg-gradient-to-r from-blue-500 to-blue-700" size="lg">
-                  Criar Nova Sala 🚀
+                <Button
+                  className="w-full rounded-sm bg-gradient-to-r from-blue-500 to-blue-700 h-11 text-base"
+                  size="lg"
+                >
+                  Create New Room 🚀
                 </Button>
               </Link>
               <Link href="/join" className="w-full">
-                <Button variant="outline" className="w-full rounded-sm" size="lg">
-                  Entrar em uma Sala 🚪
+                <Button variant="outline" className="w-full rounded-sm h-11 text-base" size="lg">
+                  Join a Room 🚪
                 </Button>
               </Link>
             </CardFooter>

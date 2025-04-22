@@ -10,11 +10,7 @@ export interface Database {
           story_link: string | null
           created_at: string
           is_active: boolean
-          has_more_stories: boolean | null
-          creator_name: string
-          max_topics: number | null
-          current_topic_count: number | null
-          expires_at: string | null
+          has_more_stories: boolean
         }
         Insert: {
           id: string
@@ -22,11 +18,7 @@ export interface Database {
           story_link?: string | null
           created_at?: string
           is_active?: boolean
-          has_more_stories?: boolean | null
-          creator_name: string
-          max_topics?: number | null
-          current_topic_count?: number | null
-          expires_at?: string | null
+          has_more_stories?: boolean
         }
         Update: {
           id?: string
@@ -34,11 +26,7 @@ export interface Database {
           story_link?: string | null
           created_at?: string
           is_active?: boolean
-          has_more_stories?: boolean | null
-          creator_name?: string
-          max_topics?: number | null
-          current_topic_count?: number | null
-          expires_at?: string | null
+          has_more_stories?: boolean
         }
       }
       users: {
@@ -49,8 +37,6 @@ export interface Database {
           is_leader: boolean
           is_observer: boolean
           created_at: string
-          last_active_at: string | null
-          device_id: string | null
         }
         Insert: {
           id?: string
@@ -59,8 +45,6 @@ export interface Database {
           is_leader: boolean
           is_observer?: boolean
           created_at?: string
-          last_active_at?: string | null
-          device_id?: string | null
         }
         Update: {
           id?: string
@@ -69,8 +53,6 @@ export interface Database {
           is_leader?: boolean
           is_observer?: boolean
           created_at?: string
-          last_active_at?: string | null
-          device_id?: string | null
         }
       }
       votes: {
@@ -104,66 +86,34 @@ export interface Database {
           id: string
           room_id: string
           topic: string
-          topic_number: number
           is_open: boolean
           average: number | null
           mode: number[] | null
           total_votes: number | null
           created_at: string
           closed_at: string | null
-          session_id: string | null
         }
         Insert: {
           id?: string
           room_id: string
           topic: string
-          topic_number: number
           is_open?: boolean
           average?: number | null
           mode?: number[] | null
           total_votes?: number | null
           created_at?: string
           closed_at?: string | null
-          session_id?: string | null
         }
         Update: {
           id?: string
           room_id?: string
           topic?: string
-          topic_number?: number
           is_open?: boolean
           average?: number | null
           mode?: number[] | null
           total_votes?: number | null
           created_at?: string
           closed_at?: string | null
-          session_id?: string | null
-        }
-      }
-      sessions: {
-        Row: {
-          id: string
-          room_id: string
-          title: string
-          created_at: string
-          closed_at: string | null
-          topic_count: number | null
-        }
-        Insert: {
-          id?: string
-          room_id: string
-          title: string
-          created_at?: string
-          closed_at?: string | null
-          topic_count?: number | null
-        }
-        Update: {
-          id?: string
-          room_id?: string
-          title?: string
-          created_at?: string
-          closed_at?: string | null
-          topic_count?: number | null
         }
       }
     }

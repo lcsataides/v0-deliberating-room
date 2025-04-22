@@ -50,22 +50,18 @@ export async function createRoom(
     const roomId = generateRoomId()
     const userId = generateUUID()
     const deviceId = getDeviceId()
-    const sessionId = generateUUID()
 
     try {
       const supabase = createClientSupabaseClient()
 
       console.log("Creating room in Supabase:", { roomId, title, storyLink, leaderName })
 
-      // Create the room with creator name
+      // Create the room
       const { error: roomError } = await supabase.from("rooms").insert({
         id: roomId,
         title,
         story_link: storyLink,
         is_active: true,
-        creator_name: leaderName,
-        current_topic_count: 0,
-        max_topics: 10,
       })
 
       if (roomError) {
@@ -81,27 +77,13 @@ export async function createRoom(
           name: leaderName,
           room_id: roomId,
           is_leader: true,
-          is_observer: true, // Leader starts as observer by default
-          device_id: deviceId,
+          is_observer: false,
         })
         .select()
 
       if (userError) {
         console.error("Error creating user in Supabase:", userError)
         throw userError
-      }
-
-      // Create a session
-      const { error: sessionError } = await supabase.from("sessions").insert({
-        id: sessionId,
-        room_id: roomId,
-        title: `Session for ${title}`,
-        topic_count: 0,
-      })
-
-      if (sessionError) {
-        console.error("Error creating session in Supabase:", sessionError)
-        throw sessionError
       }
 
       // Generate a fun name for the first round
@@ -114,8 +96,6 @@ export async function createRoom(
         room_id: roomId,
         is_open: true,
         topic: firstRoundTopic,
-        topic_number: 1,
-        session_id: sessionId,
       })
 
       if (roundError) {
@@ -137,22 +117,18 @@ export async function createRoom(
           id: userId,
           name: leaderName,
           isLeader: true,
-          isObserver: true,
+          isObserver: false,
         },
         users: [],
         currentRound: {
           id: roundId,
           topic: firstRoundTopic,
-          topicNumber: 1,
           isOpen: true,
           votes: {},
           result: null,
         },
         history: [],
         hasMoreStories: true,
-        currentTopicCount: 1,
-        maxTopics: 10,
-        sessionId,
       }
 
       // Save the room with expiration
@@ -174,22 +150,18 @@ export async function createRoom(
           id: userId,
           name: leaderName,
           isLeader: true,
-          isObserver: true,
+          isObserver: false,
         },
         users: [],
         currentRound: {
           id: roundId,
           topic: firstRoundTopic,
-          topicNumber: 1,
           isOpen: true,
           votes: {},
           result: null,
         },
         history: [],
         hasMoreStories: true,
-        currentTopicCount: 1,
-        maxTopics: 10,
-        sessionId,
       }
 
       saveRoomWithExpiry(room)
@@ -251,7 +223,6 @@ export async function joinRoom(roomId: string, name: string): Promise<{ userId: 
         room_id: roomId,
         is_leader: false,
         is_observer: false,
-        device_id: deviceId,
       })
 
       if (userError) {

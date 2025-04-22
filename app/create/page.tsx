@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { createRoom } from "@/lib/room-utils"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { AlertCircle } from "lucide-react"
+import { AlertCircle, Loader2 } from "lucide-react"
 import Footer from "@/components/footer"
 import { getCreatorName } from "@/lib/room-memory"
 
@@ -44,9 +44,9 @@ export default function CreateRoom() {
       console.log("Starting room creation...")
 
       // Create the room
-      const { roomId, userId } = await createRoom(roomTitle, storyLink, name)
+      const { roomId } = await createRoom(roomTitle, storyLink, name)
 
-      console.log("Room created successfully:", { roomId, userId })
+      console.log("Room created successfully:", { roomId })
 
       // Navigate to the room
       router.push(`/room/${roomId}`)
@@ -63,13 +63,13 @@ export default function CreateRoom() {
       <div className="absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200 animate-gradient-slow"></div>
 
       <div className="container flex items-center justify-center min-h-screen py-12 relative z-10">
-        <Card className="w-full max-w-md rounded-lg">
-          <CardHeader>
+        <Card className="w-full max-w-md rounded-lg shadow-lg">
+          <CardHeader className="px-6 pt-6 pb-4">
             <CardTitle className="text-2xl font-bold">Deliberating Room 🚀</CardTitle>
             <CardDescription>Configure a new deliberation room as leader 👑</CardDescription>
           </CardHeader>
           <form onSubmit={handleSubmit}>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-5 px-6">
               {error && (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
@@ -84,6 +84,7 @@ export default function CreateRoom() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
+                  className="h-11"
                 />
               </div>
               <div className="space-y-2">
@@ -94,6 +95,7 @@ export default function CreateRoom() {
                   value={roomTitle}
                   onChange={(e) => setRoomTitle(e.target.value)}
                   required
+                  className="h-11"
                 />
               </div>
               <div className="space-y-2">
@@ -103,16 +105,17 @@ export default function CreateRoom() {
                   placeholder="Enter link to the story"
                   value={storyLink}
                   onChange={(e) => setStoryLink(e.target.value)}
+                  className="h-11"
                 />
               </div>
             </CardContent>
-            <CardFooter>
-              <Button type="submit" className="w-full rounded-sm" disabled={isLoading}>
+            <CardFooter className="px-6 pb-6 pt-2">
+              <Button type="submit" className="w-full rounded-sm h-11 text-base" disabled={isLoading}>
                 {isLoading ? (
-                  <>
-                    <span className="mr-2">Creating...</span>
-                    <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  </>
+                  <div className="flex items-center justify-center">
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    <span>Creating...</span>
+                  </div>
                 ) : (
                   "Create Room 🚀"
                 )}

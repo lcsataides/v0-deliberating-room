@@ -16,7 +16,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { generateRandomFunName } from "@/lib/name-generator"
 import { RefreshCw } from "lucide-react"
-import { Progress } from "@/components/ui/progress"
 
 interface NewRoundModalProps {
   isOpen: boolean
@@ -105,7 +104,9 @@ export default function NewRoundModal({
                 </span>
                 <span>{Math.round(progressPercentage)}%</span>
               </div>
-              <Progress value={progressPercentage} className="h-2" />
+              <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
+                <div className="h-full bg-primary" style={{ width: `${progressPercentage}%` }} />
+              </div>
             </div>
 
             {storyLink && (

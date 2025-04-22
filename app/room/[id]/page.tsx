@@ -75,16 +75,16 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   const reconnectAttemptRef = useRef<number>(0)
   const roomIdRef = useRef<string>(params.id)
 
-  // Verificar acessibilidade e compatibilidade do navegador
+  // Check accessibility and browser compatibility
   useEffect(() => {
     const { passed, issues } = checkAccessibility()
     setAccessibilityIssues(issues)
     setShowAccessibilityAlert(!passed)
 
-    // Limpar salas expiradas
+    // Clean up expired rooms
     cleanupExpiredRooms()
 
-    // Verificar se o navegador suporta notificações
+    // Check if browser supports notifications
     if ("Notification" in window && Notification.permission === "granted") {
       setNotificationsEnabled(true)
     }
@@ -93,7 +93,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
     roomIdRef.current = params.id
   }, [])
 
-  // Carregar dados da sala
+  // Load room data
   const fetchRoomData = async () => {
     try {
       console.log(`Fetching room data for room ${params.id}`)
@@ -112,7 +112,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
       const roomData = await getRoom(params.id)
       if (!roomData) {
         console.error(`Room ${params.id} not found`)
-        setError("Sala não encontrada")
+        setError("Room not found")
         setLoading(false)
         return
       }
@@ -126,12 +126,12 @@ export default function RoomPage({ params }: { params: { id: string } }) {
       setRoom(roomData)
       setIsOfflineMode(isUsingLocalStorage())
 
-      // Verificar se o usuário é o criador
+      // Check if user is the creator
       const userIsCreator = isRoomCreator(params.id, existingUserId)
       setIsCreator(userIsCreator)
       console.log(`User is creator: ${userIsCreator}`)
 
-      // Encontrar o usuário na lista
+      // Find the user in the list
       const user =
         roomData.users.find((u) => u.id === existingUserId) ||
         (roomData.leader.id === existingUserId ? roomData.leader : null)
@@ -139,11 +139,11 @@ export default function RoomPage({ params }: { params: { id: string } }) {
       if (user) {
         console.log(`User found in room: ${user.name} (${user.id})`)
         setCurrentUser(user)
-        // Resetar contador de tentativas de reconexão
+        // Reset reconnection attempt counter
         reconnectAttemptRef.current = 0
       } else {
         console.warn(`User ${existingUserId} not found in room users list`)
-        // Tentar reintegrar o usuário
+        // Try to reintegrate the user
         if (reconnectAttemptRef.current < 3) {
           reconnectAttemptRef.current++
           console.log(`Attempting to reintegrate user (attempt ${reconnectAttemptRef.current}/3)`)
@@ -151,12 +151,12 @@ export default function RoomPage({ params }: { params: { id: string } }) {
 
           if (reintegrated) {
             console.log("User successfully reintegrated")
-            // Usuário reintegrado, recarregar dados
+            // User reintegrated, reload data
             fetchRoomData()
             return
           } else {
             console.error("Failed to reintegrate user")
-            // Se não conseguir reintegrar após 3 tentativas, mostrar formulário de entrada
+            // If can't reintegrate after 3 attempts, show join form
             if (reconnectAttemptRef.current >= 3) {
               console.log("Max reintegration attempts reached, showing join form")
               setNeedsJoining(true)
@@ -172,27 +172,27 @@ export default function RoomPage({ params }: { params: { id: string } }) {
         }
       }
 
-      // Verificar se todos votaram (exceto observadores)
+      // Check if everyone has voted (except observers)
       const activeUsers = [roomData.leader, ...roomData.users].filter((u) => !u.isObserver)
       const newAllVoted =
         activeUsers.length > 0 && activeUsers.every((u) => roomData.currentRound.votes[u.id] !== undefined)
 
-      // Se todos votaram e a rodada está aberta, mostrar alerta
+      // If everyone has voted and the round is open, show alert
       if (newAllVoted && roomData.currentRound.isOpen && !allVoted) {
         setShowAllVotedAlert(true)
 
-        // Enviar notificação se habilitado
+        // Send notification if enabled
         if (notificationsEnabled) {
           notifyAllVoted(roomData.title)
         }
 
-        // Esconder o alerta após 5 segundos
+        // Hide the alert after 5 seconds
         setTimeout(() => {
           setShowAllVotedAlert(false)
         }, 5000)
       }
 
-      // Verificar se a rodada acabou de ser encerrada para mostrar a celebração
+      // Check if the round was just closed to show the celebration
       if (
         prevRoundIdRef.current === roomData.currentRound.id &&
         !roomData.currentRound.isOpen &&
@@ -201,14 +201,14 @@ export default function RoomPage({ params }: { params: { id: string } }) {
         setShowCelebration(true)
       }
 
-      // Atualizar a referência da rodada atual
+      // Update the current round reference
       prevRoundIdRef.current = roomData.currentRound.id
 
       setAllVoted(newAllVoted)
       setLoading(false)
     } catch (err) {
-      console.error("Erro ao carregar sala:", err)
-      setError("Erro ao carregar dados da sala")
+      console.error("Error loading room:", err)
+      setError("Error loading room data")
       setLoading(false)
     }
   }
@@ -216,7 +216,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   useEffect(() => {
     fetchRoomData()
 
-    // Configurar escuta em tempo real
+    // Set up real-time listening
     const unsubscribe = subscribeToRoom(params.id, fetchRoomData)
 
     return () => {
@@ -233,7 +233,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
     fetchRoomData()
   }
 
-  // Solicitar permissão para notificações
+  // Request notification permission
   const handleRequestNotifications = async () => {
     const granted = await requestNotificationPermission()
     setNotificationsEnabled(granted)
@@ -243,16 +243,16 @@ export default function RoomPage({ params }: { params: { id: string } }) {
     if (!currentUser || !room) return
 
     try {
-      // Atualizar status de observador localmente
+      // Update observer status locally
       const newStatus = !currentUser.isObserver
 
-      // Atualizar estado local
+      // Update local state
       setCurrentUser({
         ...currentUser,
         isObserver: newStatus,
       })
 
-      // Atualizar no banco de dados
+      // Update in database
       await fetch(`/api/rooms/${room.id}/users/${currentUser.id}/observer`, {
         method: "POST",
         headers: {
@@ -261,7 +261,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
         body: JSON.stringify({ isObserver: newStatus }),
       })
     } catch (err) {
-      console.error("Erro ao alterar status de observador:", err)
+      console.error("Error changing observer status:", err)
     }
   }
 
@@ -271,7 +271,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
     try {
       await castVote(room.id, currentUser.id, room.currentRound.id, value)
     } catch (err) {
-      console.error("Erro ao registrar voto:", err)
+      console.error("Error casting vote:", err)
     }
   }
 
@@ -281,7 +281,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
     try {
       await endVoting(room.id, room.currentRound.id)
     } catch (err) {
-      console.error("Erro ao encerrar votação:", err)
+      console.error("Error ending voting:", err)
     }
   }
 
@@ -296,12 +296,12 @@ export default function RoomPage({ params }: { params: { id: string } }) {
       await startNewRound(room.id, topic)
       setShowNewRoundModal(false)
 
-      // Enviar notificação se habilitado
+      // Send notification if enabled
       if (notificationsEnabled) {
         notifyNewRound(room.title, topic)
       }
     } catch (err) {
-      console.error("Erro ao iniciar nova rodada:", err)
+      console.error("Error starting new round:", err)
     }
   }
 
@@ -312,7 +312,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
       await markNoMoreStories(room.id)
       setShowSessionClosing(true)
     } catch (err) {
-      console.error("Erro ao finalizar sessão:", err)
+      console.error("Error finishing session:", err)
     }
   }
 
@@ -329,7 +329,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
         {/* Moving gradient background */}
         <div className="absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200 animate-gradient-slow"></div>
 
-        <div className="container flex items-center justify-center min-h-screen relative z-10">
+        <div className="container flex items-center justify-center min-h-screen relative z-10 px-4 sm:px-6">
           {showDiagnostic ? (
             <ConnectionDiagnostic roomId={params.id} onBack={() => setShowDiagnostic(false)} />
           ) : (
@@ -355,7 +355,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
         <div className="container flex items-center justify-center min-h-screen relative z-10">
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center gap-4">
             <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-lg">Carregando sala...</p>
+            <p className="text-lg">Loading room...</p>
           </motion.div>
         </div>
 
@@ -370,24 +370,24 @@ export default function RoomPage({ params }: { params: { id: string } }) {
         {/* Moving gradient background */}
         <div className="absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200 animate-gradient-slow"></div>
 
-        <div className="container flex items-center justify-center min-h-screen relative z-10">
+        <div className="container flex items-center justify-center min-h-screen relative z-10 px-4 sm:px-6">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-            <Card className="w-full max-w-md">
-              <CardHeader>
+            <Card className="w-full max-w-md shadow-lg">
+              <CardHeader className="px-6 pt-6 pb-4">
                 <CardTitle className="flex items-center gap-2">
                   <XCircle className="text-destructive" size={20} />
-                  Erro
+                  Error
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <p>{error || "Ocorreu um erro ao carregar a sala"}</p>
+              <CardContent className="px-6 pb-4">
+                <p>{error || "An error occurred while loading the room"}</p>
               </CardContent>
-              <CardFooter className="flex flex-col space-y-2">
+              <CardFooter className="flex flex-col space-y-3 px-6 pb-6 pt-2">
                 <Button onClick={() => router.push("/")} className="w-full">
-                  Voltar para a página inicial
+                  Return to home page
                 </Button>
                 <Button variant="outline" onClick={() => setShowDiagnostic(true)} className="w-full">
-                  Diagnosticar Problemas de Conexão
+                  Diagnose Connection Issues
                 </Button>
               </CardFooter>
             </Card>
@@ -405,7 +405,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
         {/* Moving gradient background */}
         <div className="absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200 animate-gradient-slow"></div>
 
-        <div className="relative z-10">
+        <div className="relative z-10 px-4 sm:px-6">
           <SessionClosing
             roomTitle={room.title}
             totalRounds={room.history.length + 1}
@@ -430,7 +430,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
       {/* Moving gradient background */}
       <div className="absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200 animate-gradient-slow"></div>
 
-      <div className="container py-8 space-y-8 relative z-10">
+      <div className="container py-6 md:py-8 space-y-6 md:space-y-8 relative z-10 px-4 sm:px-6">
         <CelebrationAnimation isVisible={showCelebration} onComplete={() => setShowCelebration(false)} />
 
         <AnimatePresence>
@@ -444,7 +444,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
               <Alert className="bg-yellow-50 border-yellow-200">
                 <AlertTriangle className="h-4 w-4 text-yellow-600" />
                 <AlertDescription className="text-yellow-700">
-                  <p>Detectamos problemas de compatibilidade com seu navegador:</p>
+                  <p>We detected compatibility issues with your browser:</p>
                   <ul className="list-disc pl-5 mt-1">
                     {accessibilityIssues.map((issue, index) => (
                       <li key={index}>{issue}</li>
@@ -467,8 +467,8 @@ export default function RoomPage({ params }: { params: { id: string } }) {
               <Alert className="bg-blue-50 border-blue-200">
                 <WifiOff className="h-4 w-4 text-blue-600" />
                 <AlertDescription className="text-blue-700">
-                  Você está usando o modo offline. Os dados estão sendo armazenados localmente e serão sincronizados
-                  quando a conexão for restabelecida.
+                  You are using offline mode. Data is being stored locally and will be synchronized when the connection
+                  is restored.
                 </AlertDescription>
               </Alert>
             </motion.div>
@@ -486,7 +486,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
               <Alert className="bg-green-50 border-green-200">
                 <CheckCircle2 className="h-4 w-4 text-green-600" />
                 <AlertDescription className="text-green-700">
-                  Todos os participantes votaram! O líder da sala pode encerrar a votação.
+                  All participants have voted! The room leader can end the voting.
                 </AlertDescription>
               </Alert>
             </motion.div>
@@ -495,15 +495,15 @@ export default function RoomPage({ params }: { params: { id: string } }) {
 
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3 }}>
-            <h1 className="text-3xl font-bold">Deliberating Room 🏆</h1>
-            <div className="flex items-center gap-2 mt-1">
-              <h2 className="text-xl">{room.title}</h2>
+            <h1 className="text-2xl md:text-3xl font-bold">Deliberating Room 🏆</h1>
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
+              <h2 className="text-lg md:text-xl">{room.title}</h2>
               <Badge className="transition-all hover:bg-primary/80">{room.id}</Badge>
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={copyRoomLink}
-                title="Copiar link da sala"
+                title="Copy room link"
                 className="transition-all hover:scale-110"
               >
                 <Copy className="h-4 w-4" />
@@ -515,7 +515,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                   exit={{ opacity: 0 }}
                   className="text-sm text-green-600"
                 >
-                  Copiado!
+                  Copied!
                 </motion.span>
               )}
             </div>
@@ -525,20 +525,19 @@ export default function RoomPage({ params }: { params: { id: string } }) {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.3, delay: 0.1 }}
+            className="w-full md:w-auto"
           >
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button variant="outline" size="sm" className="rounded-sm" onClick={handleRequestNotifications}>
                       {notificationsEnabled ? <Bell className="h-4 w-4 mr-2" /> : <BellOff className="h-4 w-4 mr-2" />}
-                      {notificationsEnabled ? "Notificações Ativas" : "Ativar Notificações"}
+                      {notificationsEnabled ? "Notifications Active" : "Enable Notifications"}
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    {notificationsEnabled
-                      ? "Notificações estão ativadas"
-                      : "Ativar notificações para eventos importantes"}
+                    {notificationsEnabled ? "Notifications are enabled" : "Enable notifications for important events"}
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -552,7 +551,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     className="flex items-center gap-2"
                   >
                     <ExternalLink className="h-4 w-4" />
-                    Ver História 📖
+                    View Story 📖
                   </a>
                 </Button>
               )}
@@ -565,7 +564,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                   onClick={handleFinishSession}
                 >
                   <Flag className="h-4 w-4 mr-2" />
-                  Finalizar Sessão
+                  End Session
                 </Button>
               )}
             </div>
@@ -579,15 +578,13 @@ export default function RoomPage({ params }: { params: { id: string } }) {
             transition={{ duration: 0.4 }}
             className="lg:col-span-2"
           >
-            <Card className="rounded-lg overflow-hidden">
-              <CardHeader className="bg-primary/5">
+            <Card className="rounded-lg overflow-hidden shadow-md">
+              <CardHeader className="bg-primary/5 px-6 py-5">
                 <div className="flex justify-between items-center">
                   <div>
-                    <CardTitle>Votação 🗳️</CardTitle>
+                    <CardTitle>Voting 🗳️</CardTitle>
                     <CardDescription>
-                      {room.currentRound.isOpen
-                        ? "Selecione um cartão para votar"
-                        : "A votação está encerrada para esta rodada"}
+                      {room.currentRound.isOpen ? "Select a card to vote" : "Voting is closed for this round"}
                     </CardDescription>
                   </div>
                   <motion.div
@@ -599,7 +596,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                   </motion.div>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-6 pt-6">
+              <CardContent className="space-y-6 pt-6 px-6">
                 <div className="flex items-center space-x-2">
                   <Switch
                     id="observer-mode"
@@ -608,7 +605,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     className="data-[state=checked]:bg-primary"
                   />
                   <Label htmlFor="observer-mode" className="cursor-pointer">
-                    Modo observador 👁️ (não pode votar)
+                    Observer mode 👁️ (cannot vote)
                   </Label>
                 </div>
 
@@ -627,20 +624,20 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                   >
                     {canEndVoting && (
                       <Button
-                        className="rounded-sm bg-green-600 hover:bg-green-700 transition-all"
+                        className="rounded-sm bg-green-600 hover:bg-green-700 transition-all h-10"
                         onClick={handleEndVoting}
                       >
                         <CheckCircle2 className="h-4 w-4 mr-2" />
-                        Encerrar Votação
+                        End Voting
                       </Button>
                     )}
                     {canStartNewRound && (
                       <Button
-                        className="rounded-sm flex items-center gap-2 transition-all hover:scale-105"
+                        className="rounded-sm flex items-center gap-2 transition-all hover:scale-105 h-10"
                         onClick={handleNewRound}
                       >
                         <PlusCircle className="h-4 w-4" />
-                        Nova Rodada 🔄
+                        New Round 🔄
                       </Button>
                     )}
                   </motion.div>
@@ -665,17 +662,17 @@ export default function RoomPage({ params }: { params: { id: string } }) {
             transition={{ duration: 0.4, delay: 0.2 }}
             className="space-y-6"
           >
-            <Card className="rounded-lg overflow-hidden">
-              <CardHeader className="pb-3 bg-primary/5">
+            <Card className="rounded-lg overflow-hidden shadow-md">
+              <CardHeader className="pb-3 bg-primary/5 px-6 py-5">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg flex items-center gap-2">
                     <Users className="h-5 w-5" />
-                    Participantes 👥
+                    Participants 👥
                   </CardTitle>
                   <Badge className="bg-primary/20 text-primary hover:bg-primary/30">{room.users.length + 1}</Badge>
                 </div>
               </CardHeader>
-              <CardContent className="pt-4">
+              <CardContent className="pt-4 px-6">
                 <UsersList
                   leader={room.leader}
                   users={room.users}
@@ -691,11 +688,11 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, delay: 0.3 }}
               >
-                <Card className="rounded-lg overflow-hidden">
-                  <CardHeader className="bg-primary/5">
-                    <CardTitle className="text-lg">Histórico de Votação 📊</CardTitle>
+                <Card className="rounded-lg overflow-hidden shadow-md">
+                  <CardHeader className="bg-primary/5 px-6 py-5">
+                    <CardTitle className="text-lg">Voting History 📊</CardTitle>
                   </CardHeader>
-                  <CardContent className="pt-4">
+                  <CardContent className="pt-4 px-6">
                     <VotingHistory history={room.history} />
                   </CardContent>
                 </Card>
@@ -712,8 +709,8 @@ export default function RoomPage({ params }: { params: { id: string } }) {
         onClose={() => setShowNewRoundModal(false)}
         onConfirm={handleStartNewRound}
         storyLink={room.storyLink}
-        currentTopicCount={room.currentTopicCount}
-        maxTopics={room.maxTopics}
+        currentTopicCount={room.history.length + 1}
+        maxTopics={10}
       />
     </div>
   )
