@@ -6,6 +6,7 @@ const ROOM_PREFIX = "room_"
 const ROOM_CREATOR_PREFIX = "room_creator_"
 const ROOM_USER_PREFIX = "room_user_"
 const ROOM_HISTORY_PREFIX = "room_history_"
+const CREATOR_NAME_KEY = "creator_name"
 
 /**
  * Saves a room to localStorage with expiration
@@ -158,6 +159,26 @@ export function getRoomUser(roomId: string): string | null {
   if (typeof window === "undefined") return null
 
   return localStorage.getItem(`${ROOM_USER_PREFIX}${roomId}`)
+}
+
+/**
+ * Saves the creator's name for future use
+ * @param name The creator's name
+ */
+export function saveCreatorName(name: string): void {
+  if (typeof window === "undefined") return
+
+  localStorage.setItem(CREATOR_NAME_KEY, name)
+}
+
+/**
+ * Gets the creator's name
+ * @returns The creator's name or null if not found
+ */
+export function getCreatorName(): string | null {
+  if (typeof window === "undefined") return null
+
+  return localStorage.getItem(CREATOR_NAME_KEY)
 }
 
 /**

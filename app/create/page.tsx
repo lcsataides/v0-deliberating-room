@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,6 +12,7 @@ import { createRoom } from "@/lib/room-utils"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
 import Footer from "@/components/footer"
+import { getCreatorName } from "@/lib/room-memory"
 
 export default function CreateRoom() {
   const router = useRouter()
@@ -21,10 +22,18 @@ export default function CreateRoom() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
 
+  // Load creator name from localStorage if available
+  useEffect(() => {
+    const savedName = getCreatorName()
+    if (savedName) {
+      setName(savedName)
+    }
+  }, [])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name || !roomTitle) {
-      setError("Nome e título da sala são obrigatórios")
+      setError("Name and room title are required")
       return
     }
 
@@ -32,18 +41,18 @@ export default function CreateRoom() {
     setError("")
 
     try {
-      console.log("Iniciando criação da sala...")
+      console.log("Starting room creation...")
 
-      // Criar a sala
+      // Create the room
       const { roomId, userId } = await createRoom(roomTitle, storyLink, name)
 
-      console.log("Sala criada com sucesso:", { roomId, userId })
+      console.log("Room created successfully:", { roomId, userId })
 
-      // Navegar para a sala
+      // Navigate to the room
       router.push(`/room/${roomId}`)
     } catch (err: any) {
-      console.error("Erro detalhado ao criar sala:", err)
-      setError(err.message || "Ocorreu um erro ao criar a sala. Por favor, tente novamente.")
+      console.error("Detailed error creating room:", err)
+      setError(err.message || "An error occurred while creating the room. Please try again.")
       setIsLoading(false)
     }
   }
@@ -57,7 +66,7 @@ export default function CreateRoom() {
         <Card className="w-full max-w-md rounded-lg">
           <CardHeader>
             <CardTitle className="text-2xl font-bold">Deliberating Room 🚀</CardTitle>
-            <CardDescription>Configure uma nova sala de deliberação como líder 👑</CardDescription>
+            <CardDescription>Configure a new deliberation room as leader 👑</CardDescription>
           </CardHeader>
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
@@ -68,30 +77,30 @@ export default function CreateRoom() {
                 </Alert>
               )}
               <div className="space-y-2">
-                <Label htmlFor="name">Seu Nome 👤</Label>
+                <Label htmlFor="name">Your Name 👤</Label>
                 <Input
                   id="name"
-                  placeholder="Digite seu nome"
+                  placeholder="Enter your name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="roomTitle">Título da Sala 📝</Label>
+                <Label htmlFor="roomTitle">Room Title 📝</Label>
                 <Input
                   id="roomTitle"
-                  placeholder="Digite o título da sala"
+                  placeholder="Enter room title"
                   value={roomTitle}
                   onChange={(e) => setRoomTitle(e.target.value)}
                   required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="storyLink">Link da História (Opcional) 🔗</Label>
+                <Label htmlFor="storyLink">Story Link (Optional) 🔗</Label>
                 <Input
                   id="storyLink"
-                  placeholder="Digite o link para a história"
+                  placeholder="Enter link to the story"
                   value={storyLink}
                   onChange={(e) => setStoryLink(e.target.value)}
                 />
@@ -101,11 +110,11 @@ export default function CreateRoom() {
               <Button type="submit" className="w-full rounded-sm" disabled={isLoading}>
                 {isLoading ? (
                   <>
-                    <span className="mr-2">Criando...</span>
+                    <span className="mr-2">Creating...</span>
                     <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                   </>
                 ) : (
-                  "Criar Sala 🚀"
+                  "Create Room 🚀"
                 )}
               </Button>
             </CardFooter>

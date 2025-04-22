@@ -14,6 +14,7 @@ export interface RoundResult {
 export interface Round {
   id?: string
   topic: string
+  topicNumber: number
   isOpen: boolean
   votes: Record<string, number>
   result: RoundResult | null
@@ -22,9 +23,19 @@ export interface Round {
 export interface RoundHistoryItem {
   id: string
   topic: string
+  topicNumber: number
   votes: Record<string, number>
   result: RoundResult
   timestamp: number
+}
+
+export interface Session {
+  id: string
+  roomId: string
+  title: string
+  topicCount: number
+  createdAt: string
+  closedAt?: string
 }
 
 export interface Room {
@@ -36,6 +47,9 @@ export interface Room {
   currentRound: Round
   history: RoundHistoryItem[]
   hasMoreStories: boolean
+  currentTopicCount: number
+  maxTopics: number
+  sessionId?: string
 }
 
 export interface SessionUser {

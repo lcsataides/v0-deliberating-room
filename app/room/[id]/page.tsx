@@ -712,6 +712,8 @@ export default function RoomPage({ params }: { params: { id: string } }) {
         onClose={() => setShowNewRoundModal(false)}
         onConfirm={handleStartNewRound}
         storyLink={room.storyLink}
+        currentTopicCount={room.currentTopicCount}
+        maxTopics={room.maxTopics}
       />
     </div>
   )

@@ -16,15 +16,25 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { generateRandomFunName } from "@/lib/name-generator"
 import { RefreshCw } from "lucide-react"
+import { Progress } from "@/components/ui/progress"
 
 interface NewRoundModalProps {
   isOpen: boolean
   onClose: () => void
   onConfirm: (topic: string) => void
   storyLink?: string
+  currentTopicCount: number
+  maxTopics: number
 }
 
-export default function NewRoundModal({ isOpen, onClose, onConfirm, storyLink }: NewRoundModalProps) {
+export default function NewRoundModal({
+  isOpen,
+  onClose,
+  onConfirm,
+  storyLink,
+  currentTopicCount,
+  maxTopics,
+}: NewRoundModalProps) {
   const [topic, setTopic] = useState("")
   const [suggestedTopic, setSuggestedTopic] = useState("")
 
@@ -46,22 +56,24 @@ export default function NewRoundModal({ isOpen, onClose, onConfirm, storyLink }:
     setTopic("")
   }
 
+  const progressPercentage = (currentTopicCount / maxTopics) * 100
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[425px]">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>Nova Rodada 🔄</DialogTitle>
+            <DialogTitle>New Round 🔄</DialogTitle>
             <DialogDescription>
               {storyLink
-                ? "Defina um tópico relacionado ao link da história para a nova rodada de votação."
-                : "Defina um tópico para a nova rodada de votação."}
+                ? "Define a topic related to the story link for the new voting round."
+                : "Define a topic for the new voting round."}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="topic" className="col-span-4">
-                Tópico da Rodada
+                Round Topic
               </Label>
               <div className="col-span-4 relative">
                 <Input
@@ -78,18 +90,28 @@ export default function NewRoundModal({ isOpen, onClose, onConfirm, storyLink }:
                   size="icon"
                   className="absolute right-1 top-1/2 -translate-y-1/2"
                   onClick={generateNewSuggestedTopic}
-                  title="Gerar novo nome"
+                  title="Generate new name"
                 >
                   <RefreshCw className="h-4 w-4" />
-                  <span className="sr-only">Gerar novo nome</span>
+                  <span className="sr-only">Generate new name</span>
                 </Button>
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm mb-1">
+                <span>
+                  Topics in session: {currentTopicCount} of {maxTopics}
+                </span>
+                <span>{Math.round(progressPercentage)}%</span>
+              </div>
+              <Progress value={progressPercentage} className="h-2" />
             </div>
 
             {storyLink && (
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="storyLink" className="col-span-4">
-                  Link da História
+                  Story Link
                 </Label>
                 <div className="col-span-4 bg-muted/30 p-2 rounded-md text-sm break-all">
                   <a
@@ -106,9 +128,9 @@ export default function NewRoundModal({ isOpen, onClose, onConfirm, storyLink }:
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
-              Cancelar
+              Cancel
             </Button>
-            <Button type="submit">Iniciar Rodada</Button>
+            <Button type="submit">Start Round</Button>
           </DialogFooter>
         </form>
       </DialogContent>
