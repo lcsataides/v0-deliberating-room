@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,9 +10,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { createRoom } from "@/lib/room-utils"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { AlertCircle, Loader2 } from "lucide-react"
+import { AlertCircle } from "lucide-react"
 import Footer from "@/components/footer"
-import { getCreatorName } from "@/lib/room-memory"
 
 export default function CreateRoom() {
   const router = useRouter()
@@ -22,18 +21,10 @@ export default function CreateRoom() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
 
-  // Load creator name from localStorage if available
-  useEffect(() => {
-    const savedName = getCreatorName()
-    if (savedName) {
-      setName(savedName)
-    }
-  }, [])
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name || !roomTitle) {
-      setError("Name and room title are required")
+      setError("Nome e título da sala são obrigatórios")
       return
     }
 
@@ -41,18 +32,18 @@ export default function CreateRoom() {
     setError("")
 
     try {
-      console.log("Starting room creation...")
+      console.log("Iniciando criação da sala...")
 
-      // Create the room
-      const { roomId } = await createRoom(roomTitle, storyLink, name)
+      // Criar a sala
+      const { roomId, userId } = await createRoom(roomTitle, storyLink, name)
 
-      console.log("Room created successfully:", { roomId })
+      console.log("Sala criada com sucesso:", { roomId, userId })
 
-      // Navigate to the room
+      // Navegar para a sala
       router.push(`/room/${roomId}`)
     } catch (err: any) {
-      console.error("Detailed error creating room:", err)
-      setError(err.message || "An error occurred while creating the room. Please try again.")
+      console.error("Erro detalhado ao criar sala:", err)
+      setError(err.message || "Ocorreu um erro ao criar a sala. Por favor, tente novamente.")
       setIsLoading(false)
     }
   }
@@ -63,13 +54,13 @@ export default function CreateRoom() {
       <div className="absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200 animate-gradient-slow"></div>
 
       <div className="container flex items-center justify-center min-h-screen py-12 relative z-10">
-        <Card className="w-full max-w-md rounded-lg shadow-lg">
-          <CardHeader className="px-6 pt-6 pb-4">
+        <Card className="w-full max-w-md rounded-lg">
+          <CardHeader>
             <CardTitle className="text-2xl font-bold">Deliberating Room 🚀</CardTitle>
-            <CardDescription>Configure a new deliberation room as leader 👑</CardDescription>
+            <CardDescription>Configure uma nova sala de deliberação como líder 👑</CardDescription>
           </CardHeader>
           <form onSubmit={handleSubmit}>
-            <CardContent className="space-y-5 px-6">
+            <CardContent className="space-y-4">
               {error && (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
@@ -77,47 +68,44 @@ export default function CreateRoom() {
                 </Alert>
               )}
               <div className="space-y-2">
-                <Label htmlFor="name">Your Name 👤</Label>
+                <Label htmlFor="name">Seu Nome 👤</Label>
                 <Input
                   id="name"
-                  placeholder="Enter your name"
+                  placeholder="Digite seu nome"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
-                  className="h-11"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="roomTitle">Room Title 📝</Label>
+                <Label htmlFor="roomTitle">Título da Sala 📝</Label>
                 <Input
                   id="roomTitle"
-                  placeholder="Enter room title"
+                  placeholder="Digite o título da sala"
                   value={roomTitle}
                   onChange={(e) => setRoomTitle(e.target.value)}
                   required
-                  className="h-11"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="storyLink">Story Link (Optional) 🔗</Label>
+                <Label htmlFor="storyLink">Link da História (Opcional) 🔗</Label>
                 <Input
                   id="storyLink"
-                  placeholder="Enter link to the story"
+                  placeholder="Digite o link para a história"
                   value={storyLink}
                   onChange={(e) => setStoryLink(e.target.value)}
-                  className="h-11"
                 />
               </div>
             </CardContent>
-            <CardFooter className="px-6 pb-6 pt-2">
-              <Button type="submit" className="w-full rounded-sm h-11 text-base" disabled={isLoading}>
+            <CardFooter>
+              <Button type="submit" className="w-full rounded-sm" disabled={isLoading}>
                 {isLoading ? (
-                  <div className="flex items-center justify-center">
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                    <span>Creating...</span>
-                  </div>
+                  <>
+                    <span className="mr-2">Criando...</span>
+                    <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  </>
                 ) : (
-                  "Create Room 🚀"
+                  "Criar Sala 🚀"
                 )}
               </Button>
             </CardFooter>

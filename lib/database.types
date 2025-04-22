@@ -10,7 +10,7 @@ export interface Database {
           story_link: string | null
           created_at: string
           is_active: boolean
-          has_more_stories: boolean
+          has_more_stories: boolean | null
         }
         Insert: {
           id: string
@@ -18,7 +18,7 @@ export interface Database {
           story_link?: string | null
           created_at?: string
           is_active?: boolean
-          has_more_stories?: boolean
+          has_more_stories?: boolean | null
         }
         Update: {
           id?: string
@@ -26,7 +26,7 @@ export interface Database {
           story_link?: string | null
           created_at?: string
           is_active?: boolean
-          has_more_stories?: boolean
+          has_more_stories?: boolean | null
         }
       }
       users: {
