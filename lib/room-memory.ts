@@ -139,6 +139,26 @@ export function saveRoomCreator(roomId: string, userId: string): void {
 }
 
 /**
+ * Saves the creator's name
+ * @param name The name of the creator
+ */
+export function saveCreatorName(name: string): void {
+  if (typeof window === "undefined") return
+
+  localStorage.setItem("creator_name", name)
+}
+
+/**
+ * Gets the creator's name
+ * @returns The creator's name or null if not found
+ */
+export function getCreatorName(): string | null {
+  if (typeof window === "undefined") return null
+
+  return localStorage.getItem("creator_name")
+}
+
+/**
  * Saves a user's association with a room
  * @param roomId The ID of the room
  * @param userId The ID of the user

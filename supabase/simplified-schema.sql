@@ -4,10 +4,10 @@
 -- DROP TABLE IF EXISTS public.users;
 -- DROP TABLE IF EXISTS public.rooms;
 
--- Habilitar o UUID
+-- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Criar tabela de salas
+-- Create rooms table
 CREATE TABLE IF NOT EXISTS public.rooms (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS public.rooms (
   has_more_stories BOOLEAN DEFAULT TRUE
 );
 
--- Criar tabela de usuários
+-- Create users table
 CREATE TABLE IF NOT EXISTS public.users (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name TEXT NOT NULL,
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS public.users (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Criar tabela de rodadas
+-- Create rounds table
 CREATE TABLE IF NOT EXISTS public.rounds (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   room_id TEXT REFERENCES public.rooms(id) ON DELETE CASCADE,
@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS public.rounds (
   closed_at TIMESTAMP WITH TIME ZONE
 );
 
--- Criar tabela de votos
+-- Create votes table
 CREATE TABLE IF NOT EXISTS public.votes (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
@@ -50,29 +50,27 @@ CREATE TABLE IF NOT EXISTS public.votes (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Criar políticas RLS para permitir acesso anônimo
+-- Enable Row Level Security
 ALTER TABLE public.rooms ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.rounds ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.votes ENABLE ROW LEVEL SECURITY;
 
--- Política para visualizar salas
+-- Create policies for rooms
 CREATE POLICY "Allow read access to rooms" ON public.rooms
   FOR SELECT TO anon
   USING (TRUE);
 
--- Política para inserir salas
 CREATE POLICY "Allow insert to rooms" ON public.rooms
   FOR INSERT TO anon
   WITH CHECK (TRUE);
 
--- Política para atualizar salas
 CREATE POLICY "Allow update to rooms" ON public.rooms
   FOR UPDATE TO anon
   USING (TRUE)
   WITH CHECK (TRUE);
 
--- Políticas para usuários
+-- Create policies for users
 CREATE POLICY "Allow read access to users" ON public.users
   FOR SELECT TO anon
   USING (TRUE);
@@ -86,7 +84,7 @@ CREATE POLICY "Allow update to users" ON public.users
   USING (TRUE)
   WITH CHECK (TRUE);
 
--- Políticas para rodadas
+-- Create policies for rounds
 CREATE POLICY "Allow read access to rounds" ON public.rounds
   FOR SELECT TO anon
   USING (TRUE);
@@ -100,7 +98,7 @@ CREATE POLICY "Allow update to rounds" ON public.rounds
   USING (TRUE)
   WITH CHECK (TRUE);
 
--- Políticas para votos
+-- Create policies for votes
 CREATE POLICY "Allow read access to votes" ON public.votes
   FOR SELECT TO anon
   USING (TRUE);
